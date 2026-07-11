@@ -1,0 +1,683 @@
+=== PAGE 1 ===
+PART 2 — COMPLETE UI/UX SPECIFICATION 
+ 
+APPLICATION STRUCTURE 
+ 
+ 
+PAGE 01 
+Login 
+Simple 
+Modern 
+Premium 
+Enterprise 
+
+
+=== PAGE 2 ===
+Layout 
+------------------------------------------------ 
+ 
+         Left                 Right 
+ 
+   Login Form         Illustration 
+ 
+------------------------------------------------ 
+Left Side 
+Logo 
+Retention Signal AI 
+Heading 
+Welcome Back 
+Sub Heading 
+Sign in to continue to your workspace. 
+Fields 
+Email 
+Password 
+Remember Me 
+Forgot Password 
+Primary Button 
+Login 
+Secondary 
+Continue with Google 
+Bottom 
+Company Copyright 
+ 
+Right Side 
+Professional Enterprise Illustration 
+NOT cartoons 
+Use abstract dashboard visualization 
+Blue gradients 
+
+
+=== PAGE 3 ===
+AI analytics graphics 
+ 
+Animations 
+Fade 
+Slide 
+Professional 
+ 
+PAGE 02 
+Dashboard 
+(Executive 
+AI 
+Command 
+Center) 
+This is the MOST IMPORTANT PAGE. 
+It should feel like 
+Stripe Dashboard 
+●​
+ 
+HubSpot 
+●​
+ 
+Linear 
+●​
+ 
+Datadog 
+●​
+ 
+Salesforce 
+ 
+Top Hero Section 
+Large AI Summary 
+Good Morning, Sai Kiran 
+ 
+Retention Signal AI analyzed 52 accounts overnight. 
+ 
+
+
+=== PAGE 4 ===
+3 accounts need immediate attention. 
+ 
+7 accounts entered Warning state. 
+ 
+5 Upsell Opportunities detected. 
+ 
+4 Cross Sell opportunities identified. 
+ 
+Estimated Revenue Opportunity 
+ 
+$245,000 
+ 
+Today's Priority 
+ 
+Review Acme Corporation 
+Large premium card 
+ 
+Next Row 
+4 KPI Cards 
+Total Clients 
+ 
+Healthy 
+ 
+Warning 
+ 
+Critical 
+Each Card 
+Number 
+Mini Chart 
+Trend 
+Percentage 
+Last Updated 
+ 
+Next Row 
+Health Distribution 
+Large Donut Chart 
+Green 
+Yellow 
+Orange 
+Red 
+
+
+=== PAGE 5 ===
+ 
+Health Trend 
+Professional Line Chart 
+Filters 
+Weekly 
+Monthly 
+Quarterly 
+Yearly 
+ 
+Next Section 
+Priority Accounts 
+Professional Table 
+Columns 
+Company 
+ 
+Health 
+ 
+Trend 
+ 
+Owner 
+ 
+Priority 
+ 
+Action 
+Health 
+Use progress bars 
+Trend 
+Arrow Up 
+Arrow Down 
+ 
+Next 
+Revenue Opportunity 
+Two Cards 
+Upsell 
+
+
+=== PAGE 6 ===
+Cross Sell 
+Each 
+Revenue 
+Confidence 
+Expected Close 
+ 
+Next 
+AI Recommendations Feed 
+Cards 
+Each contains 
+Title 
+Summary 
+Confidence 
+Suggested Action 
+Priority 
+Expand Button 
+ 
+Next 
+Activity Timeline 
+Professional Timeline 
+Task Created 
+ 
+↓ 
+ 
+Report Submitted 
+ 
+↓ 
+ 
+Health Changed 
+ 
+↓ 
+ 
+Recommendation Generated 
+ 
+↓ 
+ 
+Contract Updated 
+ 
+
+
+=== PAGE 7 ===
+Next 
+Upcoming Renewals 
+Compact cards 
+Company 
+ 
+Days Left 
+ 
+Manager 
+ 
+Health 
+ 
+Renewal Risk 
+ 
+Next 
+Leadership Insights 
+Beautiful AI Cards 
+Example 
+Three enterprise clients have reduced meeting frequency. 
+ 
+This pattern has historically increased churn probability. 
+ 
+Recommended Action 
+ 
+Executive outreach. 
+ 
+PAGE 03 
+Client List 
+Enterprise Data Table 
+Top 
+Header 
+Clients 
+Subtitle 
+Manage and monitor every customer account. 
+Top Right 
+Add Client 
+
+
+=== PAGE 8 ===
+Export 
+Import 
+ 
+Filters 
+Industry 
+Manager 
+Health 
+Contract 
+Services 
+Status 
+Search 
+ 
+Table 
+Columns 
+Logo 
+Company 
+Industry 
+Manager 
+Health 
+Health Score 
+Current Services 
+Contract End 
+Status 
+Actions 
+ 
+Actions 
+View 
+Edit 
+Reports 
+
+
+=== PAGE 9 ===
+Health 
+Delete 
+ 
+Health 
+Professional Gauge 
+Not numbers only 
+ 
+Hover 
+Quick Preview 
+ 
+PAGE 04 
+Client Detail 
+This page should look incredible. 
+Header 
+Company Logo 
+Company Name 
+Industry 
+Revenue 
+Contract 
+Manager 
+Health Gauge 
+Status 
+Buttons 
+Edit 
+Generate Report 
+Assign Task 
+ 
+
+
+=== PAGE 10 ===
+Tabs 
+Overview 
+Weekly Reports 
+Health Timeline 
+AI Insights 
+Tasks 
+Recommendations 
+Notes 
+ 
+Overview 
+Health Score 
+Trend 
+Revenue 
+Contract 
+Current Services 
+Manager 
+Last Updated 
+ 
+Health Timeline 
+Interactive Graph 
+6 Months 
+12 Months 
+Custom 
+ 
+Signals 
+Professional Timeline 
+SLA Miss 
+ 
+↓ 
+ 
+Slow Reply 
+ 
+
+
+=== PAGE 11 ===
+↓ 
+ 
+Escalation 
+ 
+↓ 
+ 
+Leadership Change 
+ 
+↓ 
+ 
+Budget Pressure 
+ 
+Recommendations 
+Cards 
+Generated 
+Expandable 
+ 
+PAGE 05 
+Weekly Report 
+Beautiful Multi Step Wizard 
+Progress Bar 
+ 
+Step 1 
+General 
+Client 
+Week 
+Project 
+Manager 
+ 
+Step 2 
+Delivery 
+Slider 
+
+
+=== PAGE 12 ===
+Requirement Fulfillment 
+0-10 
+Questions 
+SLA Miss 
+Escalation 
+Rework 
+Scope Creep 
+Delay 
+Comments 
+ 
+Step 3 
+Relationship 
+Communication 
+Stakeholder Alignment 
+Meetings 
+Feedback 
+Comments 
+ 
+Step 4 
+Summary 
+Review 
+Professional Summary 
+Prediction Placeholder 
+Submit 
+ 
+Success Screen 
+Animation 
+Report Submitted 
+AI Processing... 
+
+
+=== PAGE 13 ===
+ 
+PAGE 06 
+Account Health 
+Executive Analytics 
+Top 
+Large Gauge 
+78 
+ 
+Healthy 
+ 
+Cards 
+Delivery 
+Relationship 
+External 
+Contract 
+Each 
+Score 
+Trend 
+Graph 
+ 
+Middle 
+Signal Feed 
+Professional Timeline 
+ 
+Bottom 
+Historical Graph 
+Weekly 
+Monthly 
+
+
+=== PAGE 14 ===
+Quarterly 
+Yearly 
+ 
+Bottom 
+AI Explanation 
+Beautiful Card 
+Why did Health change? 
+ 
+PAGE 07 
+Upsell Center 
+Header 
+Revenue Expansion 
+Cards 
+Company 
+Current Service 
+Suggested Expansion 
+Revenue 
+Confidence 
+Priority 
+Owner 
+ 
+Pipeline View 
+Kanban 
+Qualified 
+Review 
+Proposal 
+Won 
+
+
+=== PAGE 15 ===
+ 
+PAGE 08 
+Cross Sell Center 
+Very similar 
+But 
+Missing Service 
+Detection Source 
+Hiring 
+News 
+Growth 
+Manual 
+AI Recommendation 
+Revenue 
+ 
+PAGE 09 
+Tasks 
+Professional Kanban 
+Columns 
+Backlog 
+ 
+To Do 
+ 
+In Progress 
+ 
+Review 
+ 
+Done 
+Cards 
+
+
+=== PAGE 16 ===
+Priority 
+Owner 
+Due Date 
+Client 
+Recommendation 
+AI Badge 
+ 
+Calendar View 
+Optional 
+ 
+PAGE 10 
+Reports 
+Weekly 
+Monthly 
+Quarterly 
+Yearly 
+Cards 
+Charts 
+Export 
+Download 
+Print 
+ 
+PAGE 11 
+Notification Center 
+
+
+=== PAGE 17 ===
+Grouped 
+Today 
+Yesterday 
+Last Week 
+Each 
+Priority 
+Icon 
+Title 
+Timestamp 
+Read 
+Unread 
+ 
+PAGE 12 
+AI Recommendation Center 
+One of the best pages. 
+Looks like ChatGPT 
+Left 
+Recommendation List 
+Right 
+Detailed Explanation 
+Sections 
+Detected Signals 
+Reasoning 
+Confidence 
+Next Action 
+Related Tasks 
+ 
+
+
+=== PAGE 18 ===
+Every Recommendation 
+Expandable 
+ 
+PAGE 13 
+Settings 
+Workspace 
+Organization 
+Users 
+Roles 
+Integrations 
+Appearance 
+Notification Rules 
+AI Preferences 
+ 
+GLOBAL SEARCH 
+Must search 
+Clients 
+Reports 
+Tasks 
+Managers 
+Recommendations 
+Settings 
+ 
+COMMAND PALETTE 
+
+
+=== PAGE 19 ===
+Press 
+CTRL + K 
+Open 
+Search Everything 
+Professional 
+Like Linear 
+ 
+RIGHT DRAWER 
+Every page should support 
+Quick Preview 
+Without navigating 
+ 
+BREADCRUMBS 
+Professional 
+Always visible 
+ 
+EMPTY STATES 
+Never blank 
+Always informative 
+ 
+LOADING 
+Skeleton Screens 
+Professional 
+ 
+
+
+=== PAGE 20 ===
+ERROR 
+Enterprise 
+Helpful 
+ 
+PAGINATION 
+Professional 
+Bottom 
+ 
+TABLES 
+Resizable 
+Sortable 
+Sticky Header 
+ 
+CHARTS 
+Professional 
+Interactive 
+Tooltip 
+Legend 
+Zoom 
+ 
+MICRO INTERACTIONS 
+Hover 
+Focus 
+
+
+=== PAGE 21 ===
+Loading 
+Transitions 
+Selection 
+All subtle 
+ 
+FINAL QUALITY REQUIREMENT 
+The application should look like a $50M ARR SaaS platform, not a hackathon project. Every page should have 
+consistent spacing, reusable components, polished charts, realistic mock data, thoughtful empty/loading/error states, 
+and enterprise-grade navigation. The UI should feel like a product that could be presented to executives and 
+investors. 
+ 
+One Improvement Before Part 3 
+After reviewing the PDF again, I think we can make the product even stronger by renaming and restructuring some 
+navigation. 
+Instead of a traditional sidebar: 
+●​
+Dashboard 
+●​
+Clients 
+●​
+Reports 
+●​
+Tasks 
+I recommend organizing it around business outcomes, for example: 
+●​
+Command Center 
+●​
+Accounts 
+●​
+Health Intelligence 
+●​
+Growth Intelligence 
+●​
+Work Queue 
+●​
+Insights 
+●​
+Administration 
+This subtle change makes the product feel more like an AI operations platform than a CRM. It also aligns much better 
+with the vision described in the PDF and gives the application a distinctive identity during your demo. 
+ 
+
+
