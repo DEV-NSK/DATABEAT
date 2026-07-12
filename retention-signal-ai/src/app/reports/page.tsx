@@ -18,14 +18,14 @@ const reportTemplates = [
 
 const periods = ["Weekly", "Monthly", "Quarterly", "Yearly"];
 
-const generatedReports = Array.from({ length: 12 }, (_, i) => ({
+const generatedReports = managers.length > 0 ? Array.from({ length: 12 }, (_, i) => ({
   id: `gr${i}`,
   title: `${reportTemplates[i % 6].title} - Week ${28 - i}`,
   template: reportTemplates[i % 6].title,
   generatedAt: `2026-07-${String(11 - i).padStart(2, "0")}`,
   generatedBy: managers[i % managers.length].name,
-  status: i < 3 ? "ready" : "archived",
-}));
+  status: i < 3 ? "ready" : "archived" as const,
+})) : [];
 
 export default function ReportsPage() {
   return (

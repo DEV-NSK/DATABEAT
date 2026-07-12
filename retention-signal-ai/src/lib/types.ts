@@ -131,3 +131,54 @@ export interface AIInsight {
   relatedClients: Client[];
   createdAt: string;
 }
+
+// Weekly Report Upload types
+export type PipelineStepStatus = "pending" | "processing" | "completed" | "error";
+
+export interface PipelineStep {
+  id: string;
+  label: string;
+  status: PipelineStepStatus;
+}
+
+export interface ReportData {
+  reportingPeriod: string;
+  churnRisk: {
+    score: number;
+    level: string;
+  };
+  crossSell: string;
+  clientRequirement: string;
+  completionStatus: string;
+  onTimeDelivery: string;
+  slaCommitmentBreach: string;
+  escalations: string;
+  clientSentiment: string;
+  scopeVsCapacity: string;
+  openRisksFlags: string;
+  notes: string;
+}
+
+export interface UploadedFileMeta {
+  fileName: string;
+  fileType: string;
+  uploadedAt: string;
+}
+
+export interface WeeklyReportResponse {
+  success: boolean;
+  reportId: string;
+  processingStatus: string;
+  uploadedFile: UploadedFileMeta;
+  report: ReportData;
+  message?: string;
+}
+
+export interface UploadHistoryEntry {
+  id: string;
+  reportId: string;
+  uploadDate: string;
+  reportingPeriod: string;
+  fileName: string;
+  status: "completed" | "processing" | "error";
+}

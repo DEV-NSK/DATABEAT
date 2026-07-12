@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import {
   LayoutDashboard, Users, FileText, Heart, TrendingUp, Shuffle,
   CheckSquare, BarChart3, Bell, Settings, LogOut, Moon, Sun, ChevronLeft,
-  Activity, Sparkles, ChevronDown
+  Activity, ChevronDown
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Separator } from "@/components/ui/separator";
@@ -31,6 +31,7 @@ interface NavItem {
 const navItems: NavItem[] = [
   { label: "Command Center", href: "/", icon: LayoutDashboard },
   { label: "Accounts", href: "/clients", icon: Users },
+  { label: "Weekly Reports", href: "/weekly-reports", icon: FileText },
   { label: "Health Intelligence", href: "/account-health", icon: Heart },
   {
     label: "Growth Intelligence",
@@ -40,16 +41,8 @@ const navItems: NavItem[] = [
       { label: "Cross-Sell Center", href: "/cross-sell", icon: Shuffle },
     ],
   },
-  { label: "Work Queue", href: "/tasks", icon: CheckSquare },
-  { label: "Weekly Reports", href: "/weekly-reports", icon: FileText },
-  {
-    label: "Insights",
-    icon: Sparkles,
-    children: [
-      { label: "AI Recommendations", href: "/ai-recommendations", icon: Sparkles },
-      { label: "Reports", href: "/reports", icon: BarChart3 },
-    ],
-  },
+  { label: "Tasks", href: "/tasks", icon: CheckSquare },
+  { label: "Reports", href: "/reports", icon: BarChart3 },
   { label: "Notifications", href: "/notifications", icon: Bell },
   { sectionLabel: "Administration" },
   { label: "Settings", href: "/settings", icon: Settings },
@@ -63,7 +56,7 @@ interface SidebarProps {
 export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const pathname = usePathname();
   const [darkMode, setDarkMode] = useState(false);
-  const [expandedGroups, setExpandedGroups] = useState<string[]>(["Growth Intelligence", "Insights"]);
+  const [expandedGroups, setExpandedGroups] = useState<string[]>(["Growth Intelligence"]);
 
   const toggleDark = () => {
     setDarkMode(!darkMode);
