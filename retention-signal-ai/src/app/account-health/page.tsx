@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import {
   TrendingUp, TrendingDown, Sparkles, AlertTriangle,
   CheckSquare, Building2, User, FileText, Calendar,
-  RefreshCw, ShieldCheck, Zap,
+  RefreshCw, ShieldCheck, Zap, ArrowRight,
 } from "lucide-react";
 import {
   ResponsiveContainer, XAxis, YAxis, CartesianGrid,
@@ -291,15 +291,26 @@ export default function AccountHealthPage() {
             AI-generated health analysis from your latest weekly report
           </p>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-8 text-xs gap-1.5"
-          onClick={fetchHealthData}
-        >
-          <RefreshCw className="w-3.5 h-3.5" />
-          Refresh
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 text-xs gap-1.5"
+            onClick={() => router.push("/cross-sell")}
+          >
+            <ArrowRight className="w-3.5 h-3.5" />
+            View Cross Sell Intelligence
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 text-xs gap-1.5"
+            onClick={fetchHealthData}
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            Refresh
+          </Button>
+        </div>
       </div>
 
       {/* ── Client Info Banner ── */}
