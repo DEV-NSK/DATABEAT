@@ -182,3 +182,40 @@ export interface UploadHistoryEntry {
   fileName: string;
   status: "completed" | "processing" | "error";
 }
+
+// Authentication types
+export interface UserProfile {
+  id: string;
+  full_name: string;
+  company_name: string;
+  designation?: string;
+  email: string;
+  avatar_url?: string;
+  role: string;
+  created_at: string;
+  updated_at: string;
+  last_login?: string;
+}
+
+export interface AuthState {
+  user: UserProfile | null;
+  loading: boolean;
+  error: string | null;
+}
+
+export interface AuthContextType extends AuthState {
+  signUp: (data: SignUpData) => Promise<void>;
+  signIn: (email: string, password: string) => Promise<void>;
+  signOut: () => Promise<void>;
+  resetPassword: (email: string) => Promise<void>;
+  updateProfile: (data: Partial<UserProfile>) => Promise<void>;
+  refreshSession: () => Promise<void>;
+}
+
+export interface SignUpData {
+  fullName: string;
+  companyName: string;
+  designation?: string;
+  email: string;
+  password: string;
+}

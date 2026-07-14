@@ -9,13 +9,15 @@ import { Breadcrumbs } from "@/components/shared/breadcrumbs";
 import { motion } from "framer-motion";
 import { usePathname } from "next/navigation";
 
+const authRoutes = ["/login", "/register", "/reset-password"];
+
 export function AppShell({ children }: { children: React.ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const pathname = usePathname();
 
   // Auth pages render without shell
-  if (pathname === "/login") {
+  if (authRoutes.includes(pathname)) {
     return (
       <>
         {children}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef } from "react";
+import { useCallback, useRef, useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import axios from "axios";
 import { Card } from "@/components/ui/card";
@@ -25,12 +25,16 @@ import type {
   UploadHistoryEntry,
 } from "@/lib/types";
 import {
-  Upload, Info, FileText,
+  Upload, Info, FileText, Plus,
 } from "lucide-react";
+import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/contexts/auth-context";
+import { getAuthHeaders } from "@/lib/auth-helpers";
 
 const WEBHOOK_URL = "https://poojareddy.app.n8n.cloud/webhook/weekly-report-intake";
 
 export default function WeeklyReportsPage() {
+  const { user } = useAuth();
   const {
     selectedFile,
     progress,
@@ -49,11 +53,187 @@ export default function WeeklyReportsPage() {
     resetPipeline,
     updatePipelineStep,
     addHistoryEntry,
+    setHistory,
     deleteHistoryEntry,
     reset,
   } = useWeeklyReportStore();
 
   const progressRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
+  const [showUploadDialog, setShowUploadDialog] = useState(false);
+
+  // Fetch latest report and history on mount
+  useEffect(() => {
+    const fetchInitialData = async () => {
+      try {
+        setIsInitialLoading(true);
+        
+        const headers = await getAuthHeaders();
+        
+        // Fetch latest report
+        const latestResponse = await fetch('/api/weekly-reports/latest', { headers });
+        const latestData = await latestResponse.json();
+        
+        if (latestData.success && latestData.data) {
+          // Map actual database structure to expected WeeklyReportResponse format
+          const mappedData = mapDatabaseToResponse(latestData.data);
+          setReportData(mappedData);
+        }
+
+        // Fetch upload history
+        const historyResponse = await fetch('/api/weekly-reports/history', { headers });
+        const historyData = await historyResponse.json();
+        
+        if (historyData.success && historyData.data) {
+          // Convert database records to UploadHistoryEntry format
+          const historyEntries: UploadHistoryEntry[] = historyData.data.map((item: any) => ({
+            id: item.id,
+            reportId: item.id,
+            uploadDate: new Date(item.created_at).toLocaleDateString("en-US", {
+              month: "short",
+              day: "numeric",
+              year: "numeric",
+              hour: "2-digit",
+              minute: "2-digit",
+            }),
+            reportingPeriod: item.week || "—",
+            fileName: `${item.client_name || 'Unknown'} - ${item.week || 'Unknown'}`,
+            status: "completed",
+          }));
+          
+          // Set history from backend
+          setHistory(historyEntries);
+        }
+      } catch (error) {
+        console.error('Error fetching initial data:', error);
+      } finally {
+        setIsInitialLoading(false);
+      }
+    };
+
+    fetchInitialData();
+  }, [setReportData, setHistory]);
+
+  // Function to map database structure to WeeklyReportResponse format
+  const mapDatabaseToResponse = (dbRecord: any): WeeklyReportResponse => {
+    return {
+      success: true,
+      reportId: dbRecord.id,
+      processingStatus: "completed",
+      uploadedFile: {
+        fileName: `${dbRecord.client_name || 'Unknown'} - ${dbRecord.week || 'Unknown'}`,
+        fileType: "PDF",
+        uploadedAt: dbRecord.created_at || dbRecord.report_timestamp,
+      },
+      report: {
+        reportingPeriod: dbRecord.week || "—",
+        churnRisk: {
+          score: dbRecord.escalation ? 70 : 30,
+          level: dbRecord.escalation ? "High" : "Low",
+        },
+        crossSell: dbRecord.scope_creep ? "Yes" : "No",
+        clientRequirement: `${dbRecord.requirement_fulfillment || 0}/100`,
+        completionStatus: dbRecord.rework > 0 ? "With Rework" : "Completed",
+        onTimeDelivery: dbRecord.sla_miss ? "No" : "Yes",
+        slaCommitmentBreach: dbRecord.sla_miss ? "Yes" : "No",
+        escalations: dbRecord.escalation ? "Yes" : "No",
+        clientSentiment: dbRecord.relationship_feedback || "N/A",
+        scopeVsCapacity: dbRecord.scope_creep ? "Yes" : "No",
+        openRisksFlags: dbRecord.escalation ? "Yes" : "No",
+        notes: dbRecord.delivery_comments || "No comments",
+      },
+    };
+  };
+
+  // Function to save report data to Supabase
+  const saveToSupabase = async (data: WeeklyReportResponse, file: File) => {
+    if (!user) {
+      console.error('No authenticated user found');
+      return;
+    }
+
+    try {
+      // Extract relevant data from the n8n response
+      // Map the response to your database schema
+      const dbRecord = {
+        user_id: user.id,
+        company_name: user.company_name,
+        uploaded_by: user.full_name,
+        client_name: data.report?.reportingPeriod?.split(' - ')[0] || 'Unknown Client',
+        week: data.report?.reportingPeriod || 'Unknown Week',
+        manager: user.full_name || 'System',
+        sla_miss: data.report?.onTimeDelivery === 'No',
+        escalation: data.report?.escalations === 'Yes' || data.report?.churnRisk?.level === 'High',
+        rework: data.report?.completionStatus === 'With Rework' ? 1 : 0,
+        scope_creep: data.report?.crossSell === 'Yes' || data.report?.scopeVsCapacity === 'Yes',
+        requirement_fulfillment: parseInt(data.report?.clientRequirement?.split('/')[0]) || 100,
+        stakeholder_alignment: 80, // Default value
+        communication: 80, // Default value
+        meeting_frequency: 80, // Default value
+        delivery_comments: data.report?.notes || '',
+        relationship_feedback: data.report?.clientSentiment || '',
+        report_timestamp: new Date().toISOString(),
+      };
+
+      const { error } = await supabase
+        .from('weekly_reports')
+        .insert([dbRecord]);
+
+      if (error) {
+        console.error('Error saving to Supabase:', error);
+        // Don't throw error - we still want to show the data from n8n response
+      } else {
+        console.log('Successfully saved to Supabase');
+      }
+    } catch (error) {
+      console.error('Error in saveToSupabase:', error);
+      // Don't throw error - we still want to show the data from n8n response
+    }
+  };
+
+  // Function to refresh data from backend
+  const refreshData = useCallback(async () => {
+    try {
+      const headers = await getAuthHeaders();
+      
+      // Fetch latest report
+      const latestResponse = await fetch('/api/weekly-reports/latest', { headers });
+      const latestData = await latestResponse.json();
+      
+      if (latestData.success && latestData.data) {
+        // Map actual database structure to expected WeeklyReportResponse format
+        const mappedData = mapDatabaseToResponse(latestData.data);
+        setReportData(mappedData);
+      }
+
+      // Fetch upload history
+      const historyResponse = await fetch('/api/weekly-reports/history', { headers });
+      const historyData = await historyResponse.json();
+      
+      if (historyData.success && historyData.data) {
+        // Convert database records to UploadHistoryEntry format
+        const historyEntries: UploadHistoryEntry[] = historyData.data.map((item: any) => ({
+          id: item.id,
+          reportId: item.id,
+          uploadDate: new Date(item.created_at).toLocaleDateString("en-US", {
+            month: "short",
+            day: "numeric",
+            year: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+          }),
+          reportingPeriod: item.week || "—",
+          fileName: `${item.client_name || 'Unknown'} - ${item.week || 'Unknown'}`,
+          status: "completed",
+        }));
+        
+        // Set history from backend
+        setHistory(historyEntries);
+      }
+    } catch (error) {
+      console.error('Error refreshing data:', error);
+    }
+  }, [setReportData, setHistory]);
 
   const uploadFile = useCallback(
     async (file: File) => {
@@ -84,6 +264,17 @@ export default function WeeklyReportsPage() {
 
         const formData = new FormData();
         formData.append("file", file);
+
+        // Attach authenticated user context so n8n can associate
+        // the report with the correct user and company.
+        if (user) {
+          formData.append("user_id",      user.id);
+          formData.append("company_name", user.company_name  ?? "");
+          formData.append("uploaded_by",  user.full_name     ?? "");
+          formData.append("email",        user.email         ?? "");
+          formData.append("designation",  user.designation   ?? "");
+          formData.append("role",         user.role          ?? "Manager");
+        }
 
         const response = await axios.post(WEBHOOK_URL, formData, {
           headers: { "Content-Type": "multipart/form-data" },
@@ -126,6 +317,9 @@ export default function WeeklyReportsPage() {
           setUploadStatus("completed");
           setReportData(data);
 
+          // Save to Supabase database
+          await saveToSupabase(data, file);
+
           // Add to history
           const entry: UploadHistoryEntry = {
             id: `uh-${Date.now()}`,
@@ -142,6 +336,9 @@ export default function WeeklyReportsPage() {
             status: "completed",
           };
           addHistoryEntry(entry);
+
+          // Refresh data from backend after successful upload
+          await refreshData();
         } else {
           setUploadStatus("error");
           setErrorMessage(
@@ -169,6 +366,7 @@ export default function WeeklyReportsPage() {
       }
     },
     [
+      user,
       setUploadStatus,
       setProgress,
       setReportData,
@@ -210,9 +408,15 @@ export default function WeeklyReportsPage() {
     // Could navigate to a detail view or re-display data
   }, []);
 
+  const handleUploadNewReport = useCallback(() => {
+    setShowUploadDialog(true);
+    reset();
+  }, [reset]);
+
   const isPipelineActive = uploadStatus !== "idle";
   const showContent = reportData !== null;
-  const showEmptyState = !reportData && !isLoading && uploadStatus === "idle";
+  const showEmptyState = !reportData && !isLoading && !isInitialLoading && uploadStatus === "idle";
+  const showUploadInterface = !reportData && !isInitialLoading;
 
   return (
     <div className="space-y-6">
@@ -227,16 +431,16 @@ export default function WeeklyReportsPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button
-            size="sm"
-            className="h-8 text-xs gap-1.5"
-            onClick={() => {
-              handleFileRemove();
-            }}
-          >
-            <Upload className="w-3.5 h-3.5" />
-            Upload Report
-          </Button>
+          {showContent && (
+            <Button
+              size="sm"
+              className="h-8 text-xs gap-1.5"
+              onClick={handleUploadNewReport}
+            >
+              <Plus className="w-3.5 h-3.5" />
+              Upload New Report
+            </Button>
+          )}
         </div>
       </div>
 
@@ -244,21 +448,23 @@ export default function WeeklyReportsPage() {
       <div className="grid grid-cols-1 lg:grid-cols-[70%_30%] gap-6">
         {/* LEFT PANEL */}
         <div className="space-y-5">
-          {/* Upload Card */}
-          <Card className="p-6">
-            <FileDropzone
-              onFileSelect={handleFileSelect}
-              onFileRemove={handleFileRemove}
-              selectedFile={selectedFile}
-              progress={progress}
-              status={uploadStatus}
-              errorMessage={errorMessage}
-              onRetry={handleRetry}
-            />
-          </Card>
+          {/* Upload Card - Only show when no reports exist */}
+          {showUploadInterface && (
+            <Card className="p-6">
+              <FileDropzone
+                onFileSelect={handleFileSelect}
+                onFileRemove={handleFileRemove}
+                selectedFile={selectedFile}
+                progress={progress}
+                status={uploadStatus}
+                errorMessage={errorMessage}
+                onRetry={handleRetry}
+              />
+            </Card>
+          )}
 
-          {/* Loading Skeletons */}
-          {isLoading && !reportData && (
+          {/* Loading Skeletons - Show during initial load or upload */}
+          {(isInitialLoading || (isLoading && !reportData)) && (
             <div className="space-y-5">
               <SkeletonMetadata />
               <SkeletonSummaryCards />
@@ -319,10 +525,10 @@ export default function WeeklyReportsPage() {
                 <FileText className="w-6 h-6 text-muted-foreground" />
               </div>
               <h3 className="text-sm font-semibold text-foreground mb-1">
-                No report uploaded yet
+                No reports found
               </h3>
               <p className="text-xs text-muted-foreground max-w-sm mx-auto">
-                Upload your first weekly report to view extracted information.
+                No weekly reports have been uploaded yet. Upload your first report to get started.
               </p>
             </Card>
           )}
@@ -331,7 +537,7 @@ export default function WeeklyReportsPage() {
         {/* RIGHT PANEL */}
         <div className="space-y-5">
           {/* AI Pipeline */}
-          {isLoading ? (
+          {isLoading || isInitialLoading ? (
             <SkeletonTimeline />
           ) : (
             <AIProcessingPipeline steps={pipelineSteps} isActive={isPipelineActive} />

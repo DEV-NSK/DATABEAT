@@ -10,6 +10,10 @@ import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { User, Building2, Bell, Shield, Palette, Users, Sparkles, Link2 } from "lucide-react";
+import { useAuth } from "@/contexts/auth-context";
+import { useTheme } from "next-themes";
+import { supabase } from "@/lib/supabase";
+import { toast } from "sonner";
 
 const tabs = [
   { id: "profile", label: "Profile", icon: User },
@@ -23,7 +27,78 @@ const tabs = [
 ];
 
 export default function SettingsPage() {
+  const { user, updateProfile } = useAuth();
+  const { theme, setTheme } = useTheme();
   const [activeTab, setActiveTab] = useState("profile");
+  const [isSaving, setIsSaving] = useState(false);
+  const [isSavingPassword, setIsSavingPassword] = useState(false);
+
+  const [profileForm, setProfileForm] = useState({
+    full_name: user?.full_name ?? "",
+    company_name: user?.company_name ?? "",
+    designation: user?.designation ?? "",
+  });
+
+  const [passwordForm, setPasswordForm] = useState({
+    newPassword: "",
+    confirmPassword: "",
+  });
+  const [passwordErrors, setPasswordErrors] = useState<{ newPassword?: string; confirmPassword?: string }>({});
+
+  const getInitials = (name: string) =>
+    name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2);
+
+  const handleProfileSave = async () => {
+    if (!profileForm.full_name.trim()) {
+      toast.error("Full name is required");
+      return;
+    }
+    if (!profileForm.company_name.trim()) {
+      toast.error("Company name is required");
+      return;
+    }
+    setIsSaving(true);
+    try {
+      await updateProfile(profileForm);
+    } catch {
+      // error handled in updateProfile
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handlePasswordChange = async () => {
+    const errors: typeof passwordErrors = {};
+    if (!passwordForm.newPassword) {
+      errors.newPassword = "New password is required";
+    } else if (passwordForm.newPassword.length < 8) {
+      errors.newPassword = "Password must be at least 8 characters";
+    } else if (!/[A-Z]/.test(passwordForm.newPassword)) {
+      errors.newPassword = "Must contain an uppercase letter";
+    } else if (!/[0-9]/.test(passwordForm.newPassword)) {
+      errors.newPassword = "Must contain a number";
+    }
+    if (!passwordForm.confirmPassword) {
+      errors.confirmPassword = "Please confirm your password";
+    } else if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+      errors.confirmPassword = "Passwords do not match";
+    }
+
+    setPasswordErrors(errors);
+    if (Object.keys(errors).length > 0) return;
+
+    setIsSavingPassword(true);
+    try {
+      const { error } = await supabase.auth.updateUser({ password: passwordForm.newPassword });
+      if (error) throw error;
+      toast.success("Password updated successfully");
+      setPasswordForm({ newPassword: "", confirmPassword: "" });
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Failed to update password");
+    } finally {
+      setIsSavingPassword(false);
+    }
+  };
 
   return (
     <div>
@@ -66,7 +141,9 @@ export default function SettingsPage() {
               <CardContent className="space-y-6">
                 <div className="flex items-center gap-4">
                   <Avatar className="w-16 h-16">
-                    <AvatarFallback className="text-lg bg-primary/10 text-primary font-semibold">SK</AvatarFallback>
+                    <AvatarFallback className="text-lg bg-primary/10 text-primary font-semibold">
+                      {user ? getInitials(user.full_name) : "U"}
+                    </AvatarFallback>
                   </Avatar>
                   <div>
                     <Button variant="outline" size="sm" className="text-xs">Change Avatar</Button>
@@ -75,30 +152,55 @@ export default function SettingsPage() {
                 </div>
                 <Separator />
                 <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
-                    <Label className="text-xs">First Name</Label>
-                    <Input defaultValue="Sai" className="h-9 text-sm" />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-xs">Last Name</Label>
-                    <Input defaultValue="Kiran" className="h-9 text-sm" />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-xs">Email</Label>
-                    <Input defaultValue="sai.kiran@company.com" className="h-9 text-sm" />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-xs">Phone</Label>
-                    <Input defaultValue="+1 (555) 123-4567" className="h-9 text-sm" />
+                  <div className="space-y-1.5 col-span-2">
+                    <Label className="text-xs">Full Name</Label>
+                    <Input
+                      value={profileForm.full_name}
+                      onChange={(e) => setProfileForm((p) => ({ ...p, full_name: e.target.value }))}
+                      className="h-9 text-sm"
+                    />
                   </div>
                   <div className="space-y-1.5 col-span-2">
-                    <Label className="text-xs">Role</Label>
-                    <Input defaultValue="Director" className="h-9 text-sm" disabled />
+                    <Label className="text-xs">Company Name</Label>
+                    <Input
+                      value={profileForm.company_name}
+                      onChange={(e) => setProfileForm((p) => ({ ...p, company_name: e.target.value }))}
+                      className="h-9 text-sm"
+                    />
+                  </div>
+                  <div className="space-y-1.5 col-span-2">
+                    <Label className="text-xs">Designation</Label>
+                    <Input
+                      value={profileForm.designation}
+                      onChange={(e) => setProfileForm((p) => ({ ...p, designation: e.target.value }))}
+                      className="h-9 text-sm"
+                    />
+                  </div>
+                  <div className="space-y-1.5 col-span-2">
+                    <Label className="text-xs">Email (read-only)</Label>
+                    <Input value={user?.email ?? ""} className="h-9 text-sm" disabled />
+                  </div>
+                  <div className="space-y-1.5 col-span-2">
+                    <Label className="text-xs">Role (read-only)</Label>
+                    <Input value={user?.role ?? "Manager"} className="h-9 text-sm" disabled />
                   </div>
                 </div>
                 <div className="flex justify-end gap-2">
-                  <Button variant="outline" size="sm" className="text-xs">Cancel</Button>
-                  <Button size="sm" className="text-xs">Save Changes</Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-xs"
+                    onClick={() => setProfileForm({
+                      full_name: user?.full_name ?? "",
+                      company_name: user?.company_name ?? "",
+                      designation: user?.designation ?? "",
+                    })}
+                  >
+                    Cancel
+                  </Button>
+                  <Button size="sm" className="text-xs" onClick={handleProfileSave} disabled={isSaving}>
+                    {isSaving ? "Saving..." : "Save Changes"}
+                  </Button>
                 </div>
               </CardContent>
             </Card>
@@ -106,13 +208,11 @@ export default function SettingsPage() {
 
           {activeTab === "workspace" && (
             <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Workspace Settings</CardTitle>
-              </CardHeader>
+              <CardHeader><CardTitle className="text-base">Workspace Settings</CardTitle></CardHeader>
               <CardContent className="space-y-6">
                 <div className="space-y-1.5">
                   <Label className="text-xs">Workspace Name</Label>
-                  <Input defaultValue="Enterprise" className="h-9 text-sm" />
+                  <Input defaultValue={user?.company_name ?? "Enterprise"} className="h-9 text-sm" />
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-xs">Default Timezone</Label>
@@ -145,11 +245,99 @@ export default function SettingsPage() {
             </Card>
           )}
 
+          {activeTab === "security" && (
+            <Card>
+              <CardHeader><CardTitle className="text-base">Security Settings</CardTitle></CardHeader>
+              <CardContent className="space-y-6">
+                <p className="text-xs text-muted-foreground">
+                  Enter a new password below. You will remain signed in after the change.
+                </p>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">New Password</Label>
+                  <Input
+                    type="password"
+                    className={`h-9 text-sm ${passwordErrors.newPassword ? "border-destructive" : ""}`}
+                    value={passwordForm.newPassword}
+                    onChange={(e) => {
+                      setPasswordForm((p) => ({ ...p, newPassword: e.target.value }));
+                      setPasswordErrors((p) => ({ ...p, newPassword: undefined }));
+                    }}
+                    placeholder="••••••••"
+                  />
+                  {passwordErrors.newPassword && (
+                    <p className="text-xs text-destructive">{passwordErrors.newPassword}</p>
+                  )}
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Confirm New Password</Label>
+                  <Input
+                    type="password"
+                    className={`h-9 text-sm ${passwordErrors.confirmPassword ? "border-destructive" : ""}`}
+                    value={passwordForm.confirmPassword}
+                    onChange={(e) => {
+                      setPasswordForm((p) => ({ ...p, confirmPassword: e.target.value }));
+                      setPasswordErrors((p) => ({ ...p, confirmPassword: undefined }));
+                    }}
+                    placeholder="••••••••"
+                  />
+                  {passwordErrors.confirmPassword && (
+                    <p className="text-xs text-destructive">{passwordErrors.confirmPassword}</p>
+                  )}
+                </div>
+                <Separator />
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium">Two-Factor Authentication</p>
+                    <p className="text-xs text-muted-foreground">Add an extra layer of security</p>
+                  </div>
+                  <Button variant="outline" size="sm" className="text-xs">Enable</Button>
+                </div>
+                <div className="flex justify-end gap-2">
+                  <Button size="sm" className="text-xs" onClick={handlePasswordChange} disabled={isSavingPassword}>
+                    {isSavingPassword ? "Updating..." : "Update Password"}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {activeTab === "appearance" && (
+            <Card>
+              <CardHeader><CardTitle className="text-base">Appearance</CardTitle></CardHeader>
+              <CardContent className="space-y-6">
+                <div>
+                  <Label className="text-xs mb-3 block">Theme</Label>
+                  <div className="grid grid-cols-3 gap-3">
+                    {(["light", "dark", "system"] as const).map((t) => (
+                      <button
+                        key={t}
+                        onClick={() => setTheme(t)}
+                        className={`p-3 rounded-xl border-2 text-center text-sm font-medium capitalize transition-colors ${
+                          theme === t
+                            ? "border-primary bg-primary/5 text-primary"
+                            : "border-border hover:border-muted-foreground/30"
+                        }`}
+                      >
+                        {t}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <Separator />
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium">Compact Mode</p>
+                    <p className="text-xs text-muted-foreground">Reduce spacing throughout the interface</p>
+                  </div>
+                  <Switch />
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           {activeTab === "notifications" && (
             <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Notification Preferences</CardTitle>
-              </CardHeader>
+              <CardHeader><CardTitle className="text-base">Notification Preferences</CardTitle></CardHeader>
               <CardContent className="space-y-4">
                 {[
                   { title: "Risk Alerts", desc: "Get notified when accounts drop below health threshold", defaultChecked: true },
@@ -174,102 +362,18 @@ export default function SettingsPage() {
             </Card>
           )}
 
-          {activeTab === "security" && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Security Settings</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="space-y-1.5">
-                  <Label className="text-xs">Current Password</Label>
-                  <Input type="password" className="h-9 text-sm" />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs">New Password</Label>
-                  <Input type="password" className="h-9 text-sm" />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs">Confirm New Password</Label>
-                  <Input type="password" className="h-9 text-sm" />
-                </div>
-                <Separator />
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium">Two-Factor Authentication</p>
-                    <p className="text-xs text-muted-foreground">Add an extra layer of security</p>
-                  </div>
-                  <Button variant="outline" size="sm" className="text-xs">Enable</Button>
-                </div>
-                <div className="flex justify-end gap-2">
-                  <Button size="sm" className="text-xs">Update Password</Button>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {activeTab === "appearance" && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Appearance</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div>
-                  <Label className="text-xs mb-3 block">Theme</Label>
-                  <div className="grid grid-cols-3 gap-3">
-                    {["Light", "Dark", "System"].map((theme) => (
-                      <button key={theme} className={`p-3 rounded-xl border-2 text-center text-sm font-medium transition-colors ${
-                        theme === "Light" ? "border-primary bg-primary/5" : "border-border hover:border-muted-foreground/30"
-                      }`}>
-                        {theme}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <Separator />
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium">Compact Mode</p>
-                    <p className="text-xs text-muted-foreground">Reduce spacing throughout the interface</p>
-                  </div>
-                  <Switch />
-                </div>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium">Sidebar Collapsed by Default</p>
-                    <p className="text-xs text-muted-foreground">Start with a collapsed sidebar</p>
-                  </div>
-                  <Switch />
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
           {activeTab === "organization" && (
             <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Organization</CardTitle>
-              </CardHeader>
+              <CardHeader><CardTitle className="text-base">Organization</CardTitle></CardHeader>
               <CardContent className="space-y-6">
                 <div className="space-y-1.5">
                   <Label className="text-xs">Organization Name</Label>
-                  <Input defaultValue="DataBeat Enterprise" className="h-9 text-sm" />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs">Organization URL</Label>
-                  <Input defaultValue="databeat.retentionsignal.ai" className="h-9 text-sm" />
+                  <Input defaultValue={user?.company_name ?? ""} className="h-9 text-sm" />
                 </div>
                 <Separator />
                 <div>
                   <p className="text-sm font-medium mb-2">Users & Roles</p>
-                  <div className="space-y-2">
-                    {["Sai Kiran - Director", "Sarah Chen - Sr. Account Manager", "James Wilson - Account Manager"].map((user, i) => (
-                      <div key={i} className="flex items-center justify-between p-2.5 bg-muted/30 rounded-lg">
-                        <p className="text-xs font-medium">{user}</p>
-                        <Button variant="ghost" size="sm" className="h-6 text-[10px]">Manage</Button>
-                      </div>
-                    ))}
-                  </div>
-                  <Button variant="outline" size="sm" className="text-xs mt-3">Invite User</Button>
+                  <p className="text-xs text-muted-foreground">Role-based access control will be available in a future release.</p>
                 </div>
                 <div className="flex justify-end gap-2">
                   <Button size="sm" className="text-xs">Save Changes</Button>
@@ -280,9 +384,7 @@ export default function SettingsPage() {
 
           {activeTab === "integrations" && (
             <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Integrations</CardTitle>
-              </CardHeader>
+              <CardHeader><CardTitle className="text-base">Integrations</CardTitle></CardHeader>
               <CardContent className="space-y-4">
                 {[
                   { name: "Salesforce", desc: "Sync CRM data with account intelligence", connected: true },
@@ -308,9 +410,7 @@ export default function SettingsPage() {
 
           {activeTab === "ai-preferences" && (
             <Card>
-              <CardHeader>
-                <CardTitle className="text-base">AI Preferences</CardTitle>
-              </CardHeader>
+              <CardHeader><CardTitle className="text-base">AI Preferences</CardTitle></CardHeader>
               <CardContent className="space-y-4">
                 {[
                   { title: "Auto-generate Recommendations", desc: "Let AI automatically generate account recommendations", defaultChecked: true },
@@ -328,15 +428,6 @@ export default function SettingsPage() {
                     <Switch defaultChecked={item.defaultChecked} />
                   </div>
                 ))}
-                <Separator />
-                <div className="space-y-2">
-                  <Label className="text-xs">AI Confidence Threshold</Label>
-                  <div className="flex items-center gap-3">
-                    <input type="range" min={50} max={95} defaultValue={70} className="flex-1 h-2 bg-muted rounded-lg appearance-none cursor-pointer accent-primary" />
-                    <span className="text-sm font-semibold">70%</span>
-                  </div>
-                  <p className="text-[10px] text-muted-foreground">Only show recommendations above this confidence level</p>
-                </div>
                 <div className="flex justify-end gap-2 pt-2">
                   <Button size="sm" className="text-xs">Save Preferences</Button>
                 </div>

@@ -56,6 +56,7 @@ interface WeeklyReportState {
   resetPipeline: () => void;
   updatePipelineStep: (stepIndex: number, status: PipelineStepStatus) => void;
   addHistoryEntry: (entry: UploadHistoryEntry) => void;
+  setHistory: (entries: UploadHistoryEntry[]) => void;
   deleteHistoryEntry: (id: string) => void;
   reset: () => void;
 }
@@ -96,6 +97,9 @@ export const useWeeklyReportStore = create<WeeklyReportState>((set) => ({
 
   addHistoryEntry: (entry) =>
     set((state) => ({ history: [entry, ...state.history] })),
+
+  setHistory: (entries) =>
+    set({ history: entries }),
 
   deleteHistoryEntry: (id) =>
     set((state) => ({

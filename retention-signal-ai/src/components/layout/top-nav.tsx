@@ -11,9 +11,30 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { notifications } from "@/lib/mock-data";
+import { useAuth } from "@/contexts/auth-context";
+import { useRouter } from "next/navigation";
 
 export function TopNav() {
+  const { user, signOut } = useAuth();
+  const router = useRouter();
   const unreadCount = notifications.filter(n => !n.read).length;
+
+  const getInitials = (name: string) => {
+    return name
+      .split(" ")
+      .map(n => n[0])
+      .join("")
+      .toUpperCase()
+      .slice(0, 2);
+  };
+
+  const handleSignOut = async () => {
+    await signOut();
+  };
+
+  const handleProfileClick = () => {
+    router.push("/settings");
+  };
 
   return (
     <header className="sticky top-0 z-30 h-14 bg-card/80 backdrop-blur-sm border-b border-border flex items-center px-6 gap-4">
@@ -52,7 +73,7 @@ export function TopNav() {
           </PopoverContent>
         </Popover>
 
-        {/* Workspace Selector */}
+        {/* Workspace/Company Selector */}
         <DropdownMenu>
           <DropdownMenuTrigger
             className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border border-border text-xs font-medium hover:bg-muted"
@@ -60,15 +81,13 @@ export function TopNav() {
             <div className="w-4 h-4 rounded bg-primary/10 flex items-center justify-center">
               <span className="text-[9px] font-bold text-primary">RS</span>
             </div>
-            <span>Enterprise</span>
+            <span className="hidden sm:inline">{user?.company_name || "Workspace"}</span>
             <ChevronDown className="w-3 h-3" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-48">
-            <DropdownMenuLabel>Workspaces</DropdownMenuLabel>
+            <DropdownMenuLabel>Workspace</DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>Enterprise</DropdownMenuItem>
-            <DropdownMenuItem>Mid-Market</DropdownMenuItem>
-            <DropdownMenuItem>SMB</DropdownMenuItem>
+            <DropdownMenuItem>{user?.company_name || "Default"}</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
 
@@ -123,19 +142,21 @@ export function TopNav() {
             className="inline-flex items-center gap-2 hover:opacity-80 transition-opacity"
           >
             <Avatar className="w-7 h-7">
-              <AvatarFallback className="text-xs bg-primary/10 text-primary font-semibold">SK</AvatarFallback>
+              <AvatarFallback className="text-xs bg-primary/10 text-primary font-semibold">
+                {user ? getInitials(user.full_name) : "U"}
+              </AvatarFallback>
             </Avatar>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-48">
             <DropdownMenuLabel>
-              <p className="text-sm font-medium">Sai Kiran</p>
-              <p className="text-xs text-muted-foreground">sai.kiran@company.com</p>
+              <p className="text-sm font-medium">{user?.full_name || "User"}</p>
+              <p className="text-xs text-muted-foreground">{user?.email || ""}</p>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>Profile</DropdownMenuItem>
-            <DropdownMenuItem>Settings</DropdownMenuItem>
+            <DropdownMenuItem onClick={handleProfileClick}>Profile</DropdownMenuItem>
+            <DropdownMenuItem onClick={handleProfileClick}>Settings</DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem className="text-destructive">Sign out</DropdownMenuItem>
+            <DropdownMenuItem onClick={handleSignOut} className="text-destructive">Sign out</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>

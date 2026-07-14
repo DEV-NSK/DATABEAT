@@ -13,6 +13,8 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useAuth } from "@/contexts/auth-context";
+import { useTheme } from "next-themes";
 
 interface NavChild {
   label: string;
@@ -55,13 +57,12 @@ interface SidebarProps {
 
 export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const pathname = usePathname();
-  const [darkMode, setDarkMode] = useState(false);
+  const { user, signOut } = useAuth();
+  const { theme, setTheme } = useTheme();
   const [expandedGroups, setExpandedGroups] = useState<string[]>(["Growth Intelligence"]);
 
-  const toggleDark = () => {
-    setDarkMode(!darkMode);
-    document.documentElement.classList.toggle("dark");
-  };
+  const isDark = theme === "dark";
+  const toggleDark = () => setTheme(isDark ? "light" : "dark");
 
   const toggleGroup = (label: string) => {
     setExpandedGroups(prev =>
@@ -71,6 +72,19 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
 
   const isItemActive = (href: string) =>
     pathname === href || (href !== "/" && pathname.startsWith(href));
+
+  const getInitials = (name: string) => {
+    return name
+      .split(" ")
+      .map(n => n[0])
+      .join("")
+      .toUpperCase()
+      .slice(0, 2);
+  };
+
+  const handleLogout = async () => {
+    await signOut();
+  };
 
   return (
     <motion.aside
@@ -215,21 +229,23 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
       <div className="p-2.5 space-y-1 shrink-0">
         <div className={cn("flex items-center gap-2.5 px-2.5 py-2 rounded-lg hover:bg-muted cursor-pointer", collapsed && "justify-center")}>
           <Avatar className="w-7 h-7">
-            <AvatarFallback className="text-xs bg-primary/10 text-primary font-semibold">SK</AvatarFallback>
+            <AvatarFallback className="text-xs bg-primary/10 text-primary font-semibold">
+              {user ? getInitials(user.full_name) : "U"}
+            </AvatarFallback>
           </Avatar>
           <AnimatePresence>
             {!collapsed && (
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex-1 min-w-0">
-                <p className="text-xs font-medium text-foreground truncate">Sai Kiran</p>
-                <p className="text-[10px] text-muted-foreground truncate">Director</p>
+                <p className="text-xs font-medium text-foreground truncate">{user?.full_name || "User"}</p>
+                <p className="text-[10px] text-muted-foreground truncate">{user?.designation || user?.role || "Manager"}</p>
               </motion.div>
             )}
           </AnimatePresence>
         </div>
 
         <Button variant="ghost" size="sm" onClick={toggleDark} className={cn("w-full justify-start gap-2.5 text-muted-foreground", collapsed && "justify-center px-0")}>
-          {darkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-          {!collapsed && <span className="text-xs">Theme</span>}
+          {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+          {!collapsed && <span className="text-xs">{isDark ? "Light mode" : "Dark mode"}</span>}
         </Button>
 
         <Button variant="ghost" size="sm" onClick={onToggle} className={cn("w-full justify-start gap-2.5 text-muted-foreground", collapsed && "justify-center px-0")}>
@@ -237,7 +253,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
           {!collapsed && <span className="text-xs">Collapse</span>}
         </Button>
 
-        <Button variant="ghost" size="sm" className={cn("w-full justify-start gap-2.5 text-muted-foreground hover:text-destructive", collapsed && "justify-center px-0")}>
+        <Button variant="ghost" size="sm" onClick={handleLogout} className={cn("w-full justify-start gap-2.5 text-muted-foreground hover:text-destructive", collapsed && "justify-center px-0")}>
           <LogOut className="w-4 h-4" />
           {!collapsed && <span className="text-xs">Logout</span>}
         </Button>
