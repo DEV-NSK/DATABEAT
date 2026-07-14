@@ -1,26 +1,18 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { activities } from "@/lib/mock-data";
-import { ArrowRight, CheckSquare, TrendingUp, UserPlus, FileText, Sparkles } from "lucide-react";
+import { FileText, Sparkles, Activity } from "lucide-react";
+import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/contexts/auth-context";
 
-const iconMap = {
-  task_created: CheckSquare,
-  score_changed: TrendingUp,
-  manager_assigned: UserPlus,
-  report_submitted: FileText,
-  opportunity_found: Sparkles,
-};
-
-const colorMap = {
-  task_created: "bg-primary/10 text-primary",
-  score_changed: "bg-warning/10 text-warning",
-  manager_assigned: "bg-success/10 text-success",
-  report_submitted: "bg-muted text-muted-foreground",
-  opportunity_found: "bg-primary/10 text-primary",
-};
+interface ActivityEntry {
+  id: string;
+  company_name: string;
+  overall_health_score: number;
+  health_grade: string;
+  created_at: string;
+}
 
 function timeAgo(dateStr: string) {
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -39,40 +31,74 @@ function TimeAgo({ date }: { date: string }) {
 }
 
 export function RecentActivity() {
+  const { user } = useAuth();
+  const [entries, setEntries] = useState<ActivityEntry[]>([]);
+
+  const fetchEntries = useCallback(async () => {
+    if (!user) return;
+    const { data } = await supabase
+      .from("client_health_scores")
+      .select("id, company_name, overall_health_score, health_grade, created_at")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
+      .limit(8);
+    if (data) setEntries(data as ActivityEntry[]);
+  }, [user]);
+
+  useEffect(() => { fetchEntries(); }, [fetchEntries]);
+
+  // Realtime updates
+  useEffect(() => {
+    if (!user) return;
+    const channel = supabase
+      .channel("recent-activity-channel")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "client_health_scores", filter: `user_id=eq.${user.id}` },
+        () => fetchEntries()
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [user, fetchEntries]);
+
   return (
     <Card>
       <CardHeader className="pb-3">
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-sm font-semibold">Recent Activity</CardTitle>
-          <Button variant="ghost" size="sm" className="text-xs h-7">
-            View All <ArrowRight className="w-3 h-3 ml-1" />
-          </Button>
-        </div>
+        <CardTitle className="text-sm font-semibold">Recent Activity</CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="space-y-0">
-          {activities.slice(0, 8).map((activity, i) => {
-            const Icon = iconMap[activity.type];
-            const color = colorMap[activity.type];
-            return (
-              <div key={activity.id} className="flex items-start gap-3 py-3 border-b border-border last:border-0 last:pb-0">
+        {entries.length === 0 ? (
+          <p className="text-xs text-muted-foreground text-center py-4">
+            No activity yet. Upload a report to get started.
+          </p>
+        ) : (
+          <div className="space-y-0">
+            {entries.map((entry, i) => (
+              <div
+                key={entry.id}
+                className="flex items-start gap-3 py-3 border-b border-border last:border-0 last:pb-0"
+              >
                 <div className="relative">
-                  <div className={`w-8 h-8 rounded-lg ${color} flex items-center justify-center`}>
-                    <Icon className="w-3.5 h-3.5" />
+                  <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
+                    <Sparkles className="w-3.5 h-3.5" />
                   </div>
-                  {i < 7 && (
+                  {i < entries.length - 1 && (
                     <div className="absolute top-8 left-1/2 -translate-x-1/2 w-px h-3 bg-border" />
                   )}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs font-medium text-foreground">{activity.title}</p>
-                  <p className="text-[10px] text-muted-foreground mt-0.5">{activity.description}</p>
+                  <p className="text-xs font-medium text-foreground">
+                    Health score generated — {entry.overall_health_score}/100 (Grade {entry.health_grade})
+                  </p>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">
+                    {entry.company_name || "Unknown company"}
+                  </p>
                 </div>
-                <TimeAgo date={activity.createdAt} />
+                <TimeAgo date={entry.created_at} />
               </div>
-            );
-          })}
-        </div>
+            ))}
+          </div>
+        )}
       </CardContent>
     </Card>
   );

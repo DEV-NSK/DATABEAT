@@ -30,6 +30,7 @@ import {
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/auth-context";
 import { getAuthHeaders } from "@/lib/auth-helpers";
+import { HealthScoreHistoryTable } from "@/components/weekly-reports/health-score-history-table";
 
 const WEBHOOK_URL = "https://poojareddy.app.n8n.cloud/webhook/weekly-report-intake";
 
@@ -560,6 +561,9 @@ export default function WeeklyReportsPage() {
           )}
         </div>
       </div>
+
+      {/* AI Health Score History — sourced from client_health_scores */}
+      <HealthScoreHistoryTable />
     </div>
   );
 }

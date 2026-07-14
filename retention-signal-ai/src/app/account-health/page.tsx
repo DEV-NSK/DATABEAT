@@ -1,207 +1,629 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { clients, kpiSummary, healthTrendData } from "@/lib/mock-data";
-import { TrendingDown, TrendingUp, AlertTriangle, Sparkles } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+  TrendingUp, TrendingDown, Sparkles, AlertTriangle,
+  CheckSquare, Building2, User, FileText, Calendar,
+  RefreshCw, ShieldCheck, Zap,
+} from "lucide-react";
 import {
   ResponsiveContainer, XAxis, YAxis, CartesianGrid,
-  Tooltip, Line, Legend, AreaChart, Area
+  Tooltip, Area, AreaChart,
 } from "recharts";
 import { HealthGauge } from "@/components/shared/health-gauge";
-import { SignalTimeline, type SignalEvent } from "@/components/shared/signal-timeline";
+import { SkeletonCard, SkeletonChart } from "@/components/shared/skeleton-loader";
+import { EmptyState } from "@/components/shared/empty-state";
+import { ErrorState } from "@/components/shared/error-state";
+import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/contexts/auth-context";
 
-const healthColors = {
-  healthy: "bg-success/10 text-success",
-  warning: "bg-warning/10 text-warning",
-  at_risk: "bg-destructive/10 text-destructive",
-  critical: "bg-destructive/10 text-destructive",
-};
+// ─── Types ─────────────────────────────────────────────────────────────────
 
-const subScores = [
-  { label: "Delivery", score: 78, trend: +3, color: "#2563eb" },
-  { label: "Relationship", score: 82, trend: -1, color: "#10b981" },
-  { label: "External", score: 65, trend: -5, color: "#f59e0b" },
-  { label: "Contract", score: 71, trend: +2, color: "#8b5cf6" },
-];
+interface ClientHealthScore {
+  id: string;
+  user_id: string;
+  overall_health_score: number;
+  health_grade: string;
+  risk_level: string;
+  client_status: string;
+  retention_probability: number;
+  expansion_probability: number;
+  executive_summary: string;
+  strengths: string[] | string;
+  concerns: string[] | string;
+  recommendations: string[] | string;
+  priority_actions: string[] | string;
+  confidence_score: number;
+  company_name: string;
+  uploaded_by: string;
+  report_id: string;
+  created_at: string;
+}
 
-const signalEvents: SignalEvent[] = [
-  { signalType: "SLA Miss", source: "internal", description: "Acme Digital - SLA response time exceeded threshold", timestamp: "2 hours ago", severity: "warning" },
-  { signalType: "Health Score Dropped", source: "ai", description: "Northgate Media - Health declined 12 points in 7 days", timestamp: "5 hours ago", severity: "critical" },
-  { signalType: "Client Escalation", source: "external", description: "Pixel Labs - Formal escalation submitted via support", timestamp: "1 day ago", severity: "critical" },
-  { signalType: "Contract Renewed", source: "internal", description: "BlueWave - Annual contract renewed successfully", timestamp: "2 days ago", severity: "success" },
-  { signalType: "Meeting Frequency Down", source: "ai", description: "Nova Retail - Engagement declining, 40% fewer meetings", timestamp: "3 days ago", severity: "warning" },
-  { signalType: "Payment Delayed", source: "external", description: "GrowthX - Invoice overdue by 15 days", timestamp: "4 days ago", severity: "warning" },
-];
+interface HealthTrendPoint {
+  date: string;
+  score: number;
+}
 
-export default function AccountHealthPage() {
-  const [timeFilter, setTimeFilter] = useState<"weekly" | "monthly" | "quarterly" | "yearly">("monthly");
-  const sortedByHealth = [...clients].sort((a, b) => a.healthScore - b.healthScore);
-  const trendData = healthTrendData[timeFilter];
+// ─── Helpers ───────────────────────────────────────────────────────────────
 
+/** JSON/jsonb fields may arrive as a string — normalise to array */
+function toArray(value: unknown): string[] {
+  if (!value) return [];
+  if (Array.isArray(value)) return value as string[];
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value);
+      if (Array.isArray(parsed)) return parsed as string[];
+    } catch {
+      // plain string — treat as single item
+      return [value];
+    }
+  }
+  return [];
+}
+
+function formatDate(iso: string): string {
+  return new Date(iso).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+function getRiskBadgeClass(risk: string): string {
+  const r = risk?.toLowerCase();
+  if (r === "low") return "bg-success/10 text-success";
+  if (r === "medium") return "bg-warning/10 text-warning";
+  return "bg-destructive/10 text-destructive";
+}
+
+function getGradeBadgeClass(grade: string): string {
+  const g = grade?.toUpperCase();
+  if (g === "A" || g === "A+") return "bg-success/10 text-success";
+  if (g === "B" || g === "B+") return "bg-primary/10 text-primary";
+  if (g === "C" || g === "C+") return "bg-warning/10 text-warning";
+  return "bg-destructive/10 text-destructive";
+}
+
+// ─── Skeleton for the whole page ──────────────────────────────────────────
+
+function HealthPageSkeleton() {
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-xl font-semibold text-foreground">Health Intelligence</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">Executive analytics across all accounts</p>
-      </div>
+    <div className="space-y-6 animate-pulse">
+      {/* Header skeleton */}
+      <div className="h-5 bg-muted rounded w-48" />
 
+      {/* KPI row */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
-        <Card className="lg:col-span-1">
-          <CardContent className="p-6 flex flex-col items-center">
-            <HealthGauge
-              score={kpiSummary.avgHealthScore}
-              size="lg"
-              showTrend
-              trend={2}
-              showRecommendation
-              label="Overall Health"
-            />
-          </CardContent>
-        </Card>
-
-        {subScores.map((sub) => (
-          <Card key={sub.label}>
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between mb-3">
-                <p className="text-xs font-medium text-muted-foreground">{sub.label}</p>
-                <div className={`flex items-center gap-0.5 text-[10px] font-medium ${sub.trend > 0 ? "text-success" : "text-destructive"}`}>
-                  {sub.trend > 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
-                  {sub.trend > 0 ? "+" : ""}{sub.trend}
-                </div>
-              </div>
-              <p className="text-2xl font-bold" style={{ color: sub.color }}>{sub.score}</p>
-              <div className="h-1.5 bg-muted rounded-full overflow-hidden mt-2">
-                <div className="h-full rounded-full" style={{ width: `${sub.score}%`, backgroundColor: sub.color }} />
-              </div>
-              <div className="flex items-end gap-0.5 h-8 mt-3">
-                {Array.from({ length: 12 }, (_, i) => {
-                  const h = 30 + Math.sin(i * 0.7) * 20 + Math.sin(i * 1.3) * 10;
-                  return (
-                    <div key={i} className="flex-1 rounded-t-sm" style={{ height: `${h}%`, backgroundColor: sub.color, opacity: 0.3 + (i / 12) * 0.7 }} />
-                  );
-                })}
-              </div>
-            </CardContent>
-          </Card>
+        {Array.from({ length: 4 }).map((_, i) => (
+          <SkeletonCard key={i} />
         ))}
       </div>
 
+      {/* Middle row */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <SkeletonCard />
+        <div className="lg:col-span-2">
+          <SkeletonChart />
+        </div>
+      </div>
+
+      {/* Insight + lists */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        {Array.from({ length: 3 }).map((_, i) => (
+          <SkeletonCard key={i} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── Page ─────────────────────────────────────────────────────────────────
+
+export default function AccountHealthPage() {
+  const { user } = useAuth();
+  const router = useRouter();
+
+  const [latest, setLatest] = useState<ClientHealthScore | null>(null);
+  const [trendData, setTrendData] = useState<HealthTrendPoint[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // ── Fetch data ────────────────────────────────────────────────────────
+
+  const fetchHealthData = useCallback(async () => {
+    if (!user) return;
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      // Latest record
+      const { data: latestData, error: latestError } = await supabase
+        .from("client_health_scores")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .single();
+
+      if (latestError) {
+        if (latestError.code === "PGRST116") {
+          // no rows — not an error, just empty state
+          setLatest(null);
+          setTrendData([]);
+        } else {
+          throw latestError;
+        }
+      } else {
+        setLatest(latestData as ClientHealthScore);
+      }
+
+      // Historical trend
+      const { data: historyData, error: historyError } = await supabase
+        .from("client_health_scores")
+        .select("created_at, overall_health_score")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: true });
+
+      if (!historyError && historyData) {
+        const points: HealthTrendPoint[] = historyData.map((row: { created_at: string; overall_health_score: number }) => ({
+          date: new Date(row.created_at).toLocaleDateString("en-US", {
+            month: "short",
+            day: "numeric",
+          }),
+          score: row.overall_health_score,
+        }));
+        setTrendData(points);
+      }
+    } catch (err: unknown) {
+      console.error("Health fetch error:", err);
+      setError("Unable to load Health Intelligence. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  }, [user]);
+
+  // Initial load
+  useEffect(() => {
+    fetchHealthData();
+  }, [fetchHealthData]);
+
+  // ── Realtime auto-refresh ─────────────────────────────────────────────
+
+  useEffect(() => {
+    if (!user) return;
+
+    const channel = supabase
+      .channel("health-scores-realtime")
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "client_health_scores",
+          filter: `user_id=eq.${user.id}`,
+        },
+        () => {
+          fetchHealthData();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user, fetchHealthData]);
+
+  // ── Loading ───────────────────────────────────────────────────────────
+
+  if (loading) return <HealthPageSkeleton />;
+
+  // ── Error ─────────────────────────────────────────────────────────────
+
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-xl font-semibold text-foreground">Health Intelligence</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            AI-generated health analysis from your latest weekly report
+          </p>
+        </div>
+        <ErrorState
+          title="Unable to load Health Intelligence"
+          description={error}
+          onRetry={fetchHealthData}
+        />
+      </div>
+    );
+  }
+
+  // ── Empty ─────────────────────────────────────────────────────────────
+
+  if (!latest) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-xl font-semibold text-foreground">Health Intelligence</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            AI-generated health analysis from your latest weekly report
+          </p>
+        </div>
         <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Signal Feed</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <SignalTimeline events={signalEvents} compact />
+          <CardContent className="p-0">
+            <EmptyState
+              icon="sparkles"
+              title="No Health Score Available"
+              description="Upload a Weekly Report to generate AI Health Intelligence."
+              action={{
+                label: "Go to Weekly Reports",
+                onClick: () => router.push("/weekly-reports"),
+              }}
+            />
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // ── Normalise arrays ──────────────────────────────────────────────────
+
+  const strengths = toArray(latest.strengths);
+  const concerns = toArray(latest.concerns);
+  const recommendations = toArray(latest.recommendations);
+  const priorityActions = toArray(latest.priority_actions);
+
+  // ── Render ────────────────────────────────────────────────────────────
+
+  return (
+    <div className="space-y-6">
+      {/* ── Header ── */}
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-xl font-semibold text-foreground">Health Intelligence</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            AI-generated health analysis from your latest weekly report
+          </p>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-8 text-xs gap-1.5"
+          onClick={fetchHealthData}
+        >
+          <RefreshCw className="w-3.5 h-3.5" />
+          Refresh
+        </Button>
+      </div>
+
+      {/* ── Client Info Banner ── */}
+      <Card>
+        <CardContent className="p-4">
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-muted-foreground">
+            <span className="flex items-center gap-1.5">
+              <Building2 className="w-3.5 h-3.5" />
+              <span className="font-medium text-foreground">{latest.company_name || "—"}</span>
+            </span>
+            <span className="flex items-center gap-1.5">
+              <User className="w-3.5 h-3.5" />
+              {latest.uploaded_by || "—"}
+            </span>
+            <span className="flex items-center gap-1.5">
+              <FileText className="w-3.5 h-3.5" />
+              {latest.report_id || "—"}
+            </span>
+            <span className="flex items-center gap-1.5">
+              <Calendar className="w-3.5 h-3.5" />
+              {formatDate(latest.created_at)}
+            </span>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* ── KPI Row ── */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Overall Health */}
+        <Card className="sm:col-span-2 lg:col-span-1">
+          <CardContent className="p-6 flex flex-col items-center">
+            <HealthGauge
+              score={latest.overall_health_score ?? 0}
+              size="lg"
+              showTrend={false}
+              showRecommendation
+              label="Overall Health"
+            />
+            <div className="flex items-center gap-2 mt-3">
+              <Badge
+                variant="outline"
+                className={getGradeBadgeClass(latest.health_grade)}
+              >
+                Grade {latest.health_grade}
+              </Badge>
+              <Badge
+                variant="outline"
+                className={getRiskBadgeClass(latest.risk_level)}
+              >
+                {latest.risk_level} Risk
+              </Badge>
+            </div>
           </CardContent>
         </Card>
 
-        <Card className="lg:col-span-2">
-          <CardHeader className="pb-2">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Health Trends</CardTitle>
-              <div className="flex items-center gap-1">
-                {(["weekly", "monthly", "quarterly", "yearly"] as const).map((f) => (
-                  <button key={f} onClick={() => setTimeFilter(f)}
-                    className={`px-2.5 py-1 text-[10px] font-medium rounded-md transition-colors ${
-                      timeFilter === f ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    {f.charAt(0).toUpperCase() + f.slice(1)}
-                  </button>
-                ))}
-              </div>
+        {/* Retention */}
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-xs font-medium text-muted-foreground">Retention Probability</p>
+              <ShieldCheck className="w-4 h-4 text-success" />
             </div>
-          </CardHeader>
-          <CardContent>
-            <div className="h-64">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={trendData}>
-                  <defs>
-                    <linearGradient id="healthyGrad2" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.2} />
-                      <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
-                    </linearGradient>
-                    <linearGradient id="warningGrad2" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.2} />
-                      <stop offset="95%" stopColor="#f59e0b" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" strokeOpacity={0.5} />
-                  <XAxis dataKey="period" tick={{ fontSize: 10 }} stroke="#94a3b8" />
-                  <YAxis tick={{ fontSize: 10 }} stroke="#94a3b8" />
-                  <Tooltip contentStyle={{ fontSize: "12px", borderRadius: "8px", border: "1px solid #e5e7eb" }} />
-                  <Legend wrapperStyle={{ fontSize: "11px" }} />
-                  <Area type="monotone" dataKey="healthy" stroke="#10b981" fill="url(#healthyGrad2)" strokeWidth={2} name="Healthy" />
-                  <Area type="monotone" dataKey="warning" stroke="#f59e0b" fill="url(#warningGrad2)" strokeWidth={2} name="Warning" />
-                  <Line type="monotone" dataKey="atRisk" stroke="#ef4444" strokeWidth={2} name="At Risk" dot={false} />
-                  <Line type="monotone" dataKey="critical" stroke="#dc2626" strokeWidth={2} name="Critical" dot={false} strokeDasharray="5 5" />
-                </AreaChart>
-              </ResponsiveContainer>
+            <p className="text-2xl font-bold text-success">
+              {latest.retention_probability ?? 0}
+              <span className="text-sm font-normal text-muted-foreground">%</span>
+            </p>
+            <div className="h-1.5 bg-muted rounded-full overflow-hidden mt-2">
+              <div
+                className="h-full rounded-full bg-success transition-all duration-700"
+                style={{ width: `${latest.retention_probability ?? 0}%` }}
+              />
+            </div>
+            <div className="flex items-center gap-1 mt-2">
+              {(latest.retention_probability ?? 0) >= 70 ? (
+                <TrendingUp className="w-3 h-3 text-success" />
+              ) : (
+                <TrendingDown className="w-3 h-3 text-destructive" />
+              )}
+              <span className="text-[10px] text-muted-foreground">
+                {latest.client_status || "—"}
+              </span>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Expansion */}
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-xs font-medium text-muted-foreground">Expansion Probability</p>
+              <Zap className="w-4 h-4 text-primary" />
+            </div>
+            <p className="text-2xl font-bold text-primary">
+              {latest.expansion_probability ?? 0}
+              <span className="text-sm font-normal text-muted-foreground">%</span>
+            </p>
+            <div className="h-1.5 bg-muted rounded-full overflow-hidden mt-2">
+              <div
+                className="h-full rounded-full bg-primary transition-all duration-700"
+                style={{ width: `${latest.expansion_probability ?? 0}%` }}
+              />
+            </div>
+            <div className="flex items-center gap-1 mt-2">
+              <TrendingUp className="w-3 h-3 text-primary" />
+              <span className="text-[10px] text-muted-foreground">Growth signal</span>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Confidence */}
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-xs font-medium text-muted-foreground">AI Confidence</p>
+              <Sparkles className="w-4 h-4 text-warning" />
+            </div>
+            <p className="text-2xl font-bold text-warning">
+              {latest.confidence_score ?? 0}
+              <span className="text-sm font-normal text-muted-foreground">%</span>
+            </p>
+            <div className="h-1.5 bg-muted rounded-full overflow-hidden mt-2">
+              <div
+                className="h-full rounded-full bg-warning transition-all duration-700"
+                style={{ width: `${latest.confidence_score ?? 0}%` }}
+              />
+            </div>
+            <div className="flex items-center gap-1 mt-2">
+              <span className="text-[10px] text-muted-foreground">Score confidence</span>
             </div>
           </CardContent>
         </Card>
       </div>
 
-      <Card>
-        <CardContent className="p-5">
-          <div className="flex items-start gap-4">
-            <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
-              <Sparkles className="w-5 h-5 text-primary" />
-            </div>
-            <div className="flex-1">
-              <h3 className="text-sm font-semibold mb-2">Why did Health change?</h3>
-              <p className="text-sm text-muted-foreground leading-relaxed mb-3">
-                The overall health score decreased by 2 points this week, primarily driven by three enterprise clients
-                (Acme Digital, Northgate Media, and Pixel Labs) showing declining engagement metrics.
-              </p>
-              <p className="text-sm text-muted-foreground leading-relaxed mb-3">
-                Three enterprise clients have reduced meeting frequency. This pattern has historically increased churn probability.
-              </p>
-              <div className="bg-warning/5 border border-warning/10 rounded-lg p-3">
-                <div className="flex items-center gap-2 mb-1">
-                  <AlertTriangle className="w-4 h-4 text-warning" />
-                  <p className="text-xs font-semibold text-warning">Recommended Action</p>
-                </div>
-                <p className="text-xs text-muted-foreground">Executive outreach to the top 3 at-risk accounts within the next 48 hours.</p>
+      {/* ── Executive Summary + Health Trend ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        {/* Executive Summary */}
+        <Card>
+          <CardContent className="p-5">
+            <div className="flex items-start gap-3">
+              <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                <Sparkles className="w-4 h-4 text-primary" />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-sm font-semibold mb-2">Executive Summary</h3>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  {latest.executive_summary || "No summary available."}
+                </p>
               </div>
             </div>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
 
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-sm font-semibold">Account Health Breakdown</CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
-          <div className="divide-y divide-border">
-            {sortedByHealth.slice(0, 15).map((client) => (
-              <div key={client.id} className="flex items-center gap-3 px-4 py-3 hover:bg-muted/50">
-                <Avatar className="w-8 h-8"><AvatarFallback className="text-[10px] bg-muted">{client.name.slice(0, 2)}</AvatarFallback></Avatar>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium">{client.name}</p>
-                  <p className="text-[10px] text-muted-foreground">{client.industry} · {client.manager.name}</p>
-                </div>
-                <div className="flex items-center gap-4">
-                  <div className="flex items-center gap-2">
-                    <div className="h-2 w-20 bg-muted rounded-full overflow-hidden">
-                      <div className={`h-full rounded-full ${client.healthScore >= 80 ? "bg-success" : client.healthScore >= 60 ? "bg-warning" : "bg-destructive"}`} style={{ width: `${client.healthScore}%` }} />
-                    </div>
-                    <span className="text-xs font-semibold w-8 text-right">{client.healthScore}</span>
-                  </div>
-                  <Badge variant="outline" className={`text-[10px] ${healthColors[client.healthStatus]}`}>
-                    {client.healthStatus.replace("_", " ")}
-                  </Badge>
-                </div>
+        {/* Health Trend Chart */}
+        <Card className="lg:col-span-2">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Health Score Trend
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {trendData.length === 0 ? (
+              <div className="h-48 flex items-center justify-center">
+                <p className="text-xs text-muted-foreground">No trend data available</p>
               </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+            ) : (
+              <div className="h-48">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={trendData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="healthScoreGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#2563eb" stopOpacity={0.25} />
+                        <stop offset="95%" stopColor="#2563eb" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" strokeOpacity={0.5} />
+                    <XAxis
+                      dataKey="date"
+                      tick={{ fontSize: 10 }}
+                      stroke="#94a3b8"
+                    />
+                    <YAxis
+                      domain={[0, 100]}
+                      tick={{ fontSize: 10 }}
+                      stroke="#94a3b8"
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        fontSize: "12px",
+                        borderRadius: "8px",
+                        border: "1px solid #e5e7eb",
+                      }}
+                      formatter={(value) => [`${value ?? 0}`, "Health Score"]}
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="score"
+                      stroke="#2563eb"
+                      fill="url(#healthScoreGrad)"
+                      strokeWidth={2}
+                      dot={trendData.length === 1 ? { r: 5, fill: "#2563eb" } : false}
+                      activeDot={{ r: 5 }}
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* ── Signal Feed (Concerns) + Strengths + Recommendations ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        {/* Signal Feed — from concerns[] */}
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-1.5">
+              <AlertTriangle className="w-3.5 h-3.5 text-destructive" />
+              Signal Feed
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {concerns.length === 0 ? (
+              <p className="text-xs text-muted-foreground py-4 text-center">
+                No concerns flagged
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {concerns.map((concern, i) => (
+                  <div
+                    key={i}
+                    className="flex items-start gap-2.5 p-2.5 rounded-lg bg-destructive/5 border border-destructive/10"
+                  >
+                    <div className="w-1.5 h-1.5 rounded-full bg-destructive shrink-0 mt-1.5" />
+                    <p className="text-xs text-foreground leading-relaxed">{concern}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Strengths */}
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-1.5">
+              <TrendingUp className="w-3.5 h-3.5 text-success" />
+              Strengths
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {strengths.length === 0 ? (
+              <p className="text-xs text-muted-foreground py-4 text-center">
+                No strengths listed
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {strengths.map((strength, i) => (
+                  <div
+                    key={i}
+                    className="flex items-start gap-2.5 p-2.5 rounded-lg bg-success/5 border border-success/10"
+                  >
+                    <div className="w-1.5 h-1.5 rounded-full bg-success shrink-0 mt-1.5" />
+                    <p className="text-xs text-foreground leading-relaxed">{strength}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Recommendations */}
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-1.5">
+              <Sparkles className="w-3.5 h-3.5 text-primary" />
+              Recommendations
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {recommendations.length === 0 ? (
+              <p className="text-xs text-muted-foreground py-4 text-center">
+                No recommendations available
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {recommendations.map((rec, i) => (
+                  <div
+                    key={i}
+                    className="flex items-start gap-2.5 p-2.5 rounded-lg bg-primary/5 border border-primary/10"
+                  >
+                    <div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0 mt-1.5" />
+                    <p className="text-xs text-foreground leading-relaxed">{rec}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* ── Priority Actions ── */}
+      {priorityActions.length > 0 && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-semibold flex items-center gap-2">
+              <CheckSquare className="w-4 h-4 text-primary" />
+              Priority Actions
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {priorityActions.map((action, i) => (
+                <div
+                  key={i}
+                  className="flex items-start gap-3 p-3 rounded-lg border border-border hover:bg-muted/50 transition-colors"
+                >
+                  <div className="w-5 h-5 rounded border-2 border-muted-foreground/30 shrink-0 mt-0.5" />
+                  <p className="text-xs text-foreground leading-relaxed">{action}</p>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

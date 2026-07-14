@@ -1,143 +1,229 @@
 "use client";
 
-import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { healthDistribution, healthTrendData } from "@/lib/mock-data";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
-  PieChart, Pie, Cell, ResponsiveContainer, AreaChart, Area,
-  XAxis, YAxis, CartesianGrid, Tooltip
+  PieChart, Pie, Cell, ResponsiveContainer,
+  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
 } from "recharts";
+import type { HealthScoreRow, HealthKPIs, TrendPoint } from "@/hooks/use-health-scores";
 
-type Period = "weekly" | "monthly" | "quarterly" | "yearly";
+interface HealthChartsProps {
+  rows: HealthScoreRow[];
+  trendData: TrendPoint[];
+  kpis: HealthKPIs;
+  loading: boolean;
+}
 
-export function HealthCharts() {
-  const [period, setPeriod] = useState<Period>("monthly");
-  const data = healthTrendData[period];
+const DISTRIBUTION_COLORS = {
+  Healthy: "#10b981",
+  Warning: "#f59e0b",
+  Critical: "#ef4444",
+};
+
+const RISK_COLORS: Record<string, string> = {
+  Low: "#10b981",
+  Medium: "#f59e0b",
+  High: "#ef4444",
+};
+
+export function HealthCharts({ rows, trendData, kpis, loading }: HealthChartsProps) {
+  // ── Health Distribution ─────────────────────────────────────────────────
+  const healthDistribution = [
+    { name: "Healthy", value: kpis.healthyCount, color: DISTRIBUTION_COLORS.Healthy },
+    { name: "Warning", value: kpis.warningCount, color: DISTRIBUTION_COLORS.Warning },
+    { name: "Critical", value: kpis.criticalCount, color: DISTRIBUTION_COLORS.Critical },
+  ].filter((d) => d.value > 0);
+
+  // ── Risk Distribution ────────────────────────────────────────────────────
+  const riskCounts: Record<string, number> = {};
+  rows.forEach((r) => {
+    const level = r.risk_level ?? "Unknown";
+    riskCounts[level] = (riskCounts[level] ?? 0) + 1;
+  });
+  const riskDistribution = Object.entries(riskCounts).map(([name, value]) => ({
+    name,
+    value,
+    color: RISK_COLORS[name] ?? "#94a3b8",
+  }));
+
+  const totalReports = rows.length;
+  const hasData = totalReports > 0;
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-      {/* Health Distribution Donut */}
+      {/* ── Health Distribution Donut ── */}
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-medium text-muted-foreground">Health Distribution</CardTitle>
+          <CardTitle className="text-sm font-medium text-muted-foreground">
+            Health Distribution
+          </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="h-48">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={healthDistribution}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={55}
-                  outerRadius={80}
-                  paddingAngle={3}
-                  dataKey="value"
-                >
-                  {healthDistribution.map((entry, index) => (
-                    <Cell key={index} fill={entry.color} />
-                  ))}
-                </Pie>
-                <Tooltip
-                  contentStyle={{
-                    fontSize: "12px",
-                    borderRadius: "8px",
-                    border: "1px solid #e5e7eb",
-                    boxShadow: "0 4px 6px -1px rgba(0,0,0,0.1)",
-                  }}
-                />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-          <div className="grid grid-cols-2 gap-2 mt-2">
-            {healthDistribution.map((item) => (
-              <div key={item.name} className="flex items-center gap-2">
-                <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: item.color }} />
-                <span className="text-xs text-muted-foreground">{item.name}</span>
-                <span className="text-xs font-medium ml-auto">{item.value}</span>
+          {loading ? (
+            <Skeleton className="h-48 w-full rounded-lg" />
+          ) : !hasData ? (
+            <div className="h-48 flex items-center justify-center">
+              <p className="text-xs text-muted-foreground text-center">
+                No reports yet.
+                <br />Upload a weekly report to see distribution.
+              </p>
+            </div>
+          ) : (
+            <>
+              <div className="h-48">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={healthDistribution}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={55}
+                      outerRadius={80}
+                      paddingAngle={3}
+                      dataKey="value"
+                    >
+                      {healthDistribution.map((entry, index) => (
+                        <Cell key={index} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      contentStyle={{
+                        fontSize: "12px",
+                        borderRadius: "8px",
+                        border: "1px solid #e5e7eb",
+                      }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
               </div>
-            ))}
-          </div>
+              <div className="grid grid-cols-3 gap-2 mt-2">
+                {healthDistribution.map((item) => (
+                  <div key={item.name} className="flex items-center gap-1.5">
+                    <div
+                      className="w-2.5 h-2.5 rounded-full shrink-0"
+                      style={{ backgroundColor: item.color }}
+                    />
+                    <span className="text-xs text-muted-foreground">{item.name}</span>
+                    <span className="text-xs font-medium ml-auto">{item.value}</span>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
         </CardContent>
       </Card>
 
-      {/* Account Health Trend */}
+      {/* ── Health Score Trend ── */}
       <Card className="lg:col-span-2">
         <CardHeader className="pb-2">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Account Health Trend</CardTitle>
-            <div className="flex items-center gap-1 bg-muted rounded-lg p-0.5">
-              {(["weekly", "monthly", "quarterly", "yearly"] as Period[]).map((p) => (
-                <button
-                  key={p}
-                  onClick={() => setPeriod(p)}
-                  className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors ${
-                    period === p
-                      ? "bg-background text-foreground shadow-sm"
-                      : "text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  {p.charAt(0).toUpperCase() + p.slice(1)}
-                </button>
-              ))}
-            </div>
-          </div>
+          <CardTitle className="text-sm font-medium text-muted-foreground">
+            Health Score Trend
+          </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="h-56">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={data}>
-                <defs>
-                  <linearGradient id="healthy" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.15} />
-                    <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
-                  </linearGradient>
-                  <linearGradient id="warning" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.15} />
-                    <stop offset="95%" stopColor="#f59e0b" stopOpacity={0} />
-                  </linearGradient>
-                  <linearGradient id="atRisk" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#ef4444" stopOpacity={0.15} />
-                    <stop offset="95%" stopColor="#ef4444" stopOpacity={0} />
-                  </linearGradient>
-                  <linearGradient id="critical" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#dc2626" stopOpacity={0.15} />
-                    <stop offset="95%" stopColor="#dc2626" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" strokeOpacity={0.5} />
-                <XAxis dataKey="period" tick={{ fontSize: 11 }} stroke="#94a3b8" />
-                <YAxis tick={{ fontSize: 11 }} stroke="#94a3b8" />
-                <Tooltip
-                  contentStyle={{
-                    fontSize: "12px",
-                    borderRadius: "8px",
-                    border: "1px solid #e5e7eb",
-                    boxShadow: "0 4px 6px -1px rgba(0,0,0,0.1)",
-                  }}
-                />
-                <Area type="monotone" dataKey="healthy" stackId="1" stroke="#10b981" fill="url(#healthy)" strokeWidth={1.5} />
-                <Area type="monotone" dataKey="warning" stackId="1" stroke="#f59e0b" fill="url(#warning)" strokeWidth={1.5} />
-                <Area type="monotone" dataKey="atRisk" stackId="1" stroke="#ef4444" fill="url(#atRisk)" strokeWidth={1.5} />
-                <Area type="monotone" dataKey="critical" stackId="1" stroke="#dc2626" fill="url(#critical)" strokeWidth={1.5} />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-          <div className="flex items-center justify-center gap-4 mt-2">
-            {[
-              { label: "Healthy", color: "#10b981" },
-              { label: "Warning", color: "#f59e0b" },
-              { label: "At Risk", color: "#ef4444" },
-              { label: "Critical", color: "#dc2626" },
-            ].map((item) => (
-              <div key={item.label} className="flex items-center gap-1.5">
-                <div className="w-2 h-2 rounded-full" style={{ backgroundColor: item.color }} />
-                <span className="text-[10px] text-muted-foreground">{item.label}</span>
+          {loading ? (
+            <Skeleton className="h-56 w-full rounded-lg" />
+          ) : !hasData ? (
+            <div className="h-56 flex items-center justify-center">
+              <p className="text-xs text-muted-foreground text-center">
+                No reports yet.
+                <br />Upload a weekly report to see the trend.
+              </p>
+            </div>
+          ) : (
+            <>
+              {trendData.length === 1 && (
+                <p className="text-[11px] text-muted-foreground mb-2 text-center">
+                  Only one report available. Trend will appear after more uploads.
+                </p>
+              )}
+              <div className="h-56">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart
+                    data={trendData}
+                    margin={{ top: 4, right: 4, left: -20, bottom: 0 }}
+                  >
+                    <defs>
+                      <linearGradient id="trendGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#2563eb" stopOpacity={0.2} />
+                        <stop offset="95%" stopColor="#2563eb" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      stroke="#e5e7eb"
+                      strokeOpacity={0.5}
+                    />
+                    <XAxis
+                      dataKey="date"
+                      tick={{ fontSize: 11 }}
+                      stroke="#94a3b8"
+                    />
+                    <YAxis
+                      domain={[0, 100]}
+                      tick={{ fontSize: 11 }}
+                      stroke="#94a3b8"
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        fontSize: "12px",
+                        borderRadius: "8px",
+                        border: "1px solid #e5e7eb",
+                      }}
+                      formatter={(value) => [`${value}`, "Health Score"]}
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="score"
+                      stroke="#2563eb"
+                      fill="url(#trendGrad)"
+                      strokeWidth={2}
+                      /* Always show dot for single-point; activeDot for multi */
+                      dot={
+                        trendData.length === 1
+                          ? { r: 6, fill: "#2563eb", strokeWidth: 2 }
+                          : { r: 3, fill: "#2563eb", strokeWidth: 1 }
+                      }
+                      activeDot={{ r: 5 }}
+                      isAnimationActive={false}
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
               </div>
-            ))}
-          </div>
+            </>
+          )}
         </CardContent>
       </Card>
+
+      {/* ── Risk Distribution ── */}
+      {hasData && riskDistribution.length > 0 && (
+        <Card className="lg:col-span-3">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Risk Distribution
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-wrap gap-4 items-center">
+              {riskDistribution.map((item) => (
+                <div key={item.name} className="flex items-center gap-3 p-3 rounded-lg border border-border min-w-[120px]">
+                  <div
+                    className="w-3 h-3 rounded-full shrink-0"
+                    style={{ backgroundColor: item.color }}
+                  />
+                  <div>
+                    <p className="text-xs font-medium">{item.name} Risk</p>
+                    <p className="text-lg font-bold" style={{ color: item.color }}>
+                      {item.value}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

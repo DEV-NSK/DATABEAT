@@ -1,11 +1,20 @@
 "use client";
 
-import { Sparkles, AlertTriangle, TrendingUp, ArrowRightLeft, Eye, DollarSign, Target, ArrowRight } from "lucide-react";
+import { Sparkles, AlertTriangle, TrendingUp, ShieldCheck, Activity } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { kpiSummary } from "@/lib/mock-data";
+import { Skeleton } from "@/components/ui/skeleton";
+import type { HealthKPIs } from "@/hooks/use-health-scores";
+import { useAuth } from "@/contexts/auth-context";
 
-export function AISummaryCard() {
+interface AISummaryCardProps {
+  kpis: HealthKPIs;
+  loading: boolean;
+}
+
+export function AISummaryCard({ kpis, loading }: AISummaryCardProps) {
+  const { user } = useAuth();
+  const displayName = user?.full_name?.split(" ")[0] ?? "there";
+
   return (
     <Card className="bg-gradient-to-br from-primary/5 via-card to-card border-primary/10">
       <CardContent className="p-6">
@@ -15,62 +24,48 @@ export function AISummaryCard() {
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-1">
-              <h1 className="text-lg font-semibold text-foreground">Good Morning, Sai Kiran</h1>
+              <h1 className="text-lg font-semibold text-foreground">
+                Good morning, {displayName}
+              </h1>
             </div>
-            <p className="text-sm text-muted-foreground mb-4">
-              Retention Signal AI analyzed <span className="font-medium text-foreground">{kpiSummary.totalClients} accounts</span> overnight.
-            </p>
+
+            {loading ? (
+              <div className="space-y-2 mb-4">
+                <Skeleton className="h-4 w-72" />
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground mb-4">
+                {kpis.totalReports === 0
+                  ? "Upload a weekly report to start seeing AI-powered health insights."
+                  : `Retention Signal AI has analysed ${kpis.totalReports} health ${kpis.totalReports === 1 ? "report" : "reports"} for your account.`}
+              </p>
+            )}
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
               <SummaryItem
+                icon={<Activity className="w-4 h-4 text-primary" />}
+                value={loading ? "—" : kpis.latestScore !== null ? String(kpis.latestScore) : "—"}
+                label="latest health score"
+                variant="primary"
+              />
+              <SummaryItem
                 icon={<AlertTriangle className="w-4 h-4 text-destructive" />}
-                value="3"
-                label="accounts require immediate attention"
+                value={loading ? "—" : String(kpis.criticalCount)}
+                label="critical accounts (score < 60)"
                 variant="destructive"
               />
               <SummaryItem
-                icon={<Eye className="w-4 h-4 text-warning" />}
-                value="7"
-                label="accounts show early warning signals"
-                variant="warning"
-              />
-              <SummaryItem
-                icon={<TrendingUp className="w-4 h-4 text-success" />}
-                value={String(kpiSummary.upsellOpportunities)}
-                label="upsell opportunities detected"
+                icon={<ShieldCheck className="w-4 h-4 text-success" />}
+                value={loading ? "—" : String(kpis.healthyCount)}
+                label="healthy accounts (score ≥ 80)"
                 variant="success"
               />
               <SummaryItem
-                icon={<ArrowRightLeft className="w-4 h-4 text-primary" />}
-                value={String(kpiSummary.crossSellOpportunities)}
-                label="cross-sell opportunities discovered"
-                variant="primary"
+                icon={<TrendingUp className="w-4 h-4 text-warning" />}
+                value={loading ? "—" : String(kpis.warningCount)}
+                label="accounts in warning zone"
+                variant="warning"
               />
-            </div>
-
-            {/* Revenue Opportunity + Today's Priority */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mt-4">
-              <div className="flex items-center gap-3 p-3 rounded-lg bg-success/5 border border-success/10">
-                <div className="w-8 h-8 rounded-lg bg-success/10 flex items-center justify-center">
-                  <DollarSign className="w-4 h-4 text-success" />
-                </div>
-                <div>
-                  <p className="text-[10px] text-muted-foreground">Estimated Revenue Opportunity</p>
-                  <p className="text-lg font-bold text-success">$245,000</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3 p-3 rounded-lg bg-primary/5 border border-primary/10">
-                <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
-                  <Target className="w-4 h-4 text-primary" />
-                </div>
-                <div className="flex-1">
-                  <p className="text-[10px] text-muted-foreground">Today&apos;s Priority</p>
-                  <p className="text-sm font-semibold">Review Acme Digital</p>
-                </div>
-                <Button variant="ghost" size="sm" className="h-7 text-[10px] gap-1">
-                  View <ArrowRight className="w-3 h-3" />
-                </Button>
-              </div>
             </div>
           </div>
         </div>
