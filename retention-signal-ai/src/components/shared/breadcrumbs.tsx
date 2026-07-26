@@ -5,18 +5,19 @@ import Link from "next/link";
 import { ChevronRight, Home } from "lucide-react";
 
 const pathLabels: Record<string, string> = {
-  "": "Command Center",
-  clients: "Accounts",
+  "": "Dashboard",
+  clients: "My Clients",
   "weekly-reports": "Weekly Reports",
   "account-health": "Health Intelligence",
-  upsell: "Growth · Upsell",
-  "cross-sell": "Growth · Cross-Sell",
-  tasks: "Work Queue",
-  reports: "Reports & Insights",
+  "risk-signals": "Risk Signals",
+  "cross-sell": "Opportunities",
+  tasks: "Tasks",
+  reports: "Reports",
   notifications: "Notifications",
-  settings: "Administration",
-  "ai-recommendations": "AI Recommendations",
+  profile: "Profile",
+  settings: "Settings",
   login: "Login",
+  register: "Register",
 };
 
 export function Breadcrumbs() {

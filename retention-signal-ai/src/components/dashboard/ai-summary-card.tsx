@@ -35,9 +35,9 @@ export function AISummaryCard({ kpis, loading }: AISummaryCardProps) {
               </div>
             ) : (
               <p className="text-sm text-muted-foreground mb-4">
-                {kpis.totalReports === 0
-                  ? "Upload a weekly report to start seeing AI-powered health insights."
-                  : `Retention Signal AI has analysed ${kpis.totalReports} health ${kpis.totalReports === 1 ? "report" : "reports"} for your account.`}
+                {kpis.totalClients === 0
+                  ? "Upload a weekly report to start seeing AI-powered health insights for your clients."
+                  : `You have ${kpis.totalClients} assigned client${kpis.totalClients !== 1 ? "s" : ""}. ${kpis.criticalCount > 0 ? `${kpis.criticalCount} require immediate attention.` : "All clients are performing within thresholds."}`}
               </p>
             )}
 
@@ -51,19 +51,19 @@ export function AISummaryCard({ kpis, loading }: AISummaryCardProps) {
               <SummaryItem
                 icon={<AlertTriangle className="w-4 h-4 text-destructive" />}
                 value={loading ? "—" : String(kpis.criticalCount)}
-                label="critical accounts (score < 60)"
+                label="critical clients (score < 45)"
                 variant="destructive"
               />
               <SummaryItem
                 icon={<ShieldCheck className="w-4 h-4 text-success" />}
                 value={loading ? "—" : String(kpis.healthyCount)}
-                label="healthy accounts (score ≥ 80)"
+                label="healthy clients (score ≥ 80)"
                 variant="success"
               />
               <SummaryItem
                 icon={<TrendingUp className="w-4 h-4 text-warning" />}
                 value={loading ? "—" : String(kpis.warningCount)}
-                label="accounts in warning zone"
+                label="clients in watch zone"
                 variant="warning"
               />
             </div>

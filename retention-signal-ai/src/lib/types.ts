@@ -191,14 +191,24 @@ export interface UserProfile {
   designation?: string;
   email: string;
   avatar_url?: string;
-  role: string;
+  role: string;          // "team_lead" | "manager" | "ceo"
+  manager_id?: string;   // FK → profiles.id (the assigned manager)
+  is_active?: boolean;
   created_at: string;
   updated_at: string;
   last_login?: string;
 }
 
+export interface ManagerProfile {
+  id: string;
+  full_name: string;
+  email: string;
+  role: string;
+}
+
 export interface AuthState {
   user: UserProfile | null;
+  manager: ManagerProfile | null;  // resolved manager for team leads
   loading: boolean;
   error: string | null;
 }

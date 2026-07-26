@@ -6,6 +6,8 @@ import { KPICards } from "./kpi-cards";
 import { HealthCharts } from "./health-charts";
 import { RecentHealthReports } from "./recent-health-reports";
 import { RecentActivity } from "./recent-activity";
+import { PriorityRiskAccounts } from "./priority-risk-accounts";
+import { TopExpansionOpportunities } from "./top-expansion-opportunities";
 import { useHealthScores } from "@/hooks/use-health-scores";
 
 const fadeIn = {
@@ -34,6 +36,16 @@ export default function DashboardContent() {
           kpis={healthData.kpis}
           loading={healthData.loading}
         />
+      </motion.div>
+
+      {/* PRD §12 + §13: Priority Risk Accounts + Top Expansion Opportunities */}
+      <motion.div
+        {...fadeIn}
+        transition={{ duration: 0.3, delay: 0.13 }}
+        className="grid grid-cols-1 lg:grid-cols-2 gap-6"
+      >
+        <PriorityRiskAccounts rows={healthData.rows} loading={healthData.loading} />
+        <TopExpansionOpportunities />
       </motion.div>
 
       <motion.div {...fadeIn} transition={{ duration: 0.3, delay: 0.15 }}>

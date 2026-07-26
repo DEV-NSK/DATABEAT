@@ -1,6 +1,6 @@
 "use client";
 
-import { FileText, Activity, ShieldCheck, TrendingUp, TrendingDown } from "lucide-react";
+import { FileText, Activity, ShieldCheck, TrendingUp, TrendingDown, Users, AlertTriangle, Eye, CheckCircle } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { HealthKPIs } from "@/hooks/use-health-scores";
@@ -11,63 +11,51 @@ interface KPICardsProps {
 }
 
 export function KPICards({ kpis, loading }: KPICardsProps) {
-  const trendPositive =
-    kpis.scoreTrend !== null && kpis.scoreTrend >= 0;
+  const trendPositive = kpis.scoreTrend !== null && kpis.scoreTrend >= 0;
   const trendLabel =
     kpis.scoreTrend !== null
       ? `${kpis.scoreTrend >= 0 ? "+" : ""}${kpis.scoreTrend} vs previous`
       : null;
 
+  // PRD §11: Total Clients, Healthy, Watch, At Risk, Critical
   const cards = [
     {
-      title: "Total Reports",
-      value: loading ? null : kpis.totalReports,
+      title: "Total Clients",
+      value: loading ? null : kpis.totalClients ?? kpis.totalReports,
       change: null,
       trend: "neutral" as const,
-      icon: FileText,
+      icon: Users,
       color: "text-primary",
       bg: "bg-primary/10",
     },
     {
-      title: "Latest Health Score",
-      value: loading ? null : kpis.latestScore ?? "—",
-      change: trendLabel,
-      trend: (kpis.scoreTrend !== null
-        ? trendPositive
-          ? "up"
-          : "down"
-        : "neutral") as "up" | "down" | "neutral",
-      icon: Activity,
+      title: "Healthy",
+      value: loading ? null : kpis.healthyCount,
+      change: null,
+      trend: "neutral" as const,
+      icon: CheckCircle,
       color: "text-success",
       bg: "bg-success/10",
     },
     {
-      title: "Retention Probability",
-      value:
-        loading
-          ? null
-          : kpis.latestRetention !== null
-          ? `${kpis.latestRetention}%`
-          : "—",
+      title: "Watch",
+      value: loading ? null : kpis.warningCount,
       change: null,
       trend: "neutral" as const,
-      icon: ShieldCheck,
+      icon: Eye,
       color: "text-warning",
       bg: "bg-warning/10",
     },
     {
-      title: "Expansion Probability",
-      value:
-        loading
-          ? null
-          : kpis.latestExpansion !== null
-          ? `${kpis.latestExpansion}%`
-          : "—",
-      change: null,
-      trend: "neutral" as const,
-      icon: TrendingUp,
-      color: "text-primary",
-      bg: "bg-primary/10",
+      title: "At Risk",
+      value: loading ? null : kpis.atRiskCount ?? kpis.criticalCount,
+      change: trendLabel,
+      trend: (kpis.scoreTrend !== null
+        ? trendPositive ? "up" : "down"
+        : "neutral") as "up" | "down" | "neutral",
+      icon: AlertTriangle,
+      color: "text-destructive",
+      bg: "bg-destructive/10",
     },
   ];
 

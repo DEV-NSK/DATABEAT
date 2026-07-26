@@ -1,129 +1,284 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { tasks } from "@/lib/mock-data";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { LayoutGrid, List, Calendar, Flag, Plus, MoreHorizontal, Sparkles } from "lucide-react";
-import type { TaskStatus } from "@/lib/types";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Sparkles, CheckSquare, Clock, AlertCircle, Flag, Calendar, RefreshCw } from "lucide-react";
+import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/contexts/auth-context";
+import { EmptyState } from "@/components/shared/empty-state";
+import { toast } from "sonner";
 
-const statusConfig: Record<TaskStatus | "backlog", { label: string; color: string; column: string }> = {
-  backlog: { label: "Backlog", color: "bg-muted/50 text-muted-foreground", column: "bg-muted/20" },
-  todo: { label: "To Do", color: "bg-muted text-muted-foreground", column: "bg-muted/30" },
-  in_progress: { label: "In Progress", color: "bg-primary/10 text-primary", column: "bg-primary/5" },
-  done: { label: "Done", color: "bg-success/10 text-success", column: "bg-success/5" },
-  blocked: { label: "Blocked", color: "bg-destructive/10 text-destructive", column: "bg-destructive/5" },
+type Priority = "high" | "medium" | "low";
+type Status = "todo" | "in_progress" | "completed" | "blocked";
+
+interface Task {
+  id: string;
+  title: string;
+  description?: string;
+  status: Status;
+  priority: Priority;
+  category?: string;
+  due_date?: string;
+  is_ai_generated?: boolean;
+  client_name?: string;
+  user_id?: string;
+  created_at: string;
+}
+
+const STATUS_CONFIG: Record<Status, { label: string; color: string }> = {
+  todo: { label: "To Do", color: "bg-muted text-muted-foreground" },
+  in_progress: { label: "In Progress", color: "bg-primary/10 text-primary" },
+  completed: { label: "Completed", color: "bg-success/10 text-success" },
+  blocked: { label: "Blocked", color: "bg-destructive/10 text-destructive" },
 };
 
-const priorityColors = {
+const PRIORITY_COLORS: Record<Priority, string> = {
   high: "text-destructive",
   medium: "text-warning",
   low: "text-muted-foreground",
 };
 
 export default function TasksPage() {
-  const [view, setView] = useState<"kanban" | "table">("kanban");
-  const columns: (TaskStatus | "backlog")[] = ["backlog", "todo", "in_progress", "done", "blocked"];
+  const { user } = useAuth();
+  const router = useRouter();
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState<"all" | Status>("all");
+
+  const fetchTasks = useCallback(async () => {
+    if (!user) return;
+    setLoading(true);
+    try {
+      // Try fetching from a tasks table scoped to user_id
+      // Falls back gracefully if table doesn't exist
+      const { data, error } = await supabase
+        .from("tasks")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        // Table may not exist yet — show empty state
+        console.warn("Tasks table not found or query error:", error.message);
+        setTasks([]);
+      } else {
+        setTasks((data ?? []) as Task[]);
+      }
+    } catch (e) {
+      console.error(e);
+      setTasks([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [user]);
+
+  useEffect(() => { fetchTasks(); }, [fetchTasks]);
+
+  // Realtime subscription
+  useEffect(() => {
+    if (!user) return;
+    const ch = supabase
+      .channel("tasks-rt")
+      .on("postgres_changes", {
+        event: "*",
+        schema: "public",
+        table: "tasks",
+        filter: `user_id=eq.${user.id}`,
+      }, () => fetchTasks())
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [user, fetchTasks]);
+
+  const updateTaskStatus = async (id: string, newStatus: Status) => {
+    // Optimistic update
+    setTasks((ts) => ts.map((t) => t.id === id ? { ...t, status: newStatus } : t));
+    const { error } = await supabase
+      .from("tasks")
+      .update({ status: newStatus })
+      .eq("id", id);
+    if (error) {
+      toast.error("Failed to update task status");
+      fetchTasks(); // revert
+    }
+  };
+
+  const filtered = filter === "all" ? tasks : tasks.filter((t) => t.status === filter);
+
+  const todoCount = tasks.filter((t) => t.status === "todo").length;
+  const inProgressCount = tasks.filter((t) => t.status === "in_progress").length;
+  const doneCount = tasks.filter((t) => t.status === "completed").length;
+  const blockedCount = tasks.filter((t) => t.status === "blocked").length;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
+      {/* Header */}
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-foreground">Work Queue</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">{tasks.length} tasks · {tasks.filter(t => t.status === "done").length} completed</p>
+          <h1 className="text-xl font-semibold text-foreground">Tasks</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            {loading ? "Loading…" : `${tasks.length} task${tasks.length !== 1 ? "s" : ""} · ${doneCount} completed`}
+          </p>
         </div>
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1 bg-muted rounded-lg p-0.5">
-            <button onClick={() => setView("kanban")} className={`p-1.5 rounded-md ${view === "kanban" ? "bg-background shadow-sm" : ""}`}><LayoutGrid className="w-4 h-4" /></button>
-            <button onClick={() => setView("table")} className={`p-1.5 rounded-md ${view === "table" ? "bg-background shadow-sm" : ""}`}><List className="w-4 h-4" /></button>
-          </div>
-          <Button size="sm" className="h-8 text-xs gap-1"><Plus className="w-3.5 h-3.5" />New Task</Button>
-        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-8 text-xs gap-1.5"
+          onClick={fetchTasks}
+          disabled={loading}
+        >
+          <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
+          Refresh
+        </Button>
       </div>
 
-      {view === "kanban" ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
-          {columns.map((status) => {
-            const config = statusConfig[status];
-            const statusTasks = status === "backlog"
-              ? tasks.filter(t => t.status === "todo").slice(8, 16)
-              : tasks.filter(t => t.status === status).slice(0, 8);
+      {/* KPI Strip */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {[
+          { label: "To Do", count: todoCount, color: "text-muted-foreground" },
+          { label: "In Progress", count: inProgressCount, color: "text-primary" },
+          { label: "Completed", count: doneCount, color: "text-success" },
+          { label: "Blocked", count: blockedCount, color: "text-destructive" },
+        ].map(({ label, count, color }) => (
+          <Card
+            key={label}
+            className="cursor-pointer hover:shadow-sm transition-shadow"
+            onClick={() => setFilter(label.toLowerCase().replace(" ", "_") as Status | "all")}
+          >
+            <CardContent className="p-4">
+              <p className={`text-2xl font-bold ${color}`}>{loading ? "—" : count}</p>
+              <p className="text-xs text-muted-foreground">{label}</p>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {/* Filters */}
+      <div className="flex items-center gap-1 flex-wrap">
+        {(["all", "todo", "in_progress", "completed", "blocked"] as const).map((f) => (
+          <button
+            key={f}
+            onClick={() => setFilter(f)}
+            className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
+              filter === f ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {f === "all" ? "All" : f === "in_progress" ? "In Progress" : f.charAt(0).toUpperCase() + f.slice(1)}
+          </button>
+        ))}
+      </div>
+
+      {/* Task List */}
+      {loading ? (
+        <div className="space-y-2">
+          {[1, 2, 3].map((i) => <Skeleton key={i} className="h-20 w-full rounded-xl" />)}
+        </div>
+      ) : filtered.length === 0 ? (
+        <Card>
+          <CardContent className="p-0">
+            <EmptyState
+              icon="check"
+              title={filter === "all" ? "No tasks yet" : `No ${filter.replace("_", " ")} tasks`}
+              description={
+                filter === "all"
+                  ? "Tasks generated by AI or created manually will appear here."
+                  : "No tasks match this status."
+              }
+            />
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="space-y-2">
+          {filtered.map((task) => {
+            const st = STATUS_CONFIG[task.status] ?? STATUS_CONFIG["todo"];
             return (
-              <div key={status} className={`rounded-xl p-3 ${config.column}`}>
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-sm font-medium">{config.label}</h3>
-                    <Badge variant="outline" className="text-[10px]">{statusTasks.length}</Badge>
-                  </div>
-                  <Button variant="ghost" size="icon" className="h-6 w-6"><Plus className="w-3 h-3" /></Button>
-                </div>
-                <div className="space-y-2">
-                  {statusTasks.map((task) => (
-                    <Card key={task.id} className="hover:shadow-sm transition-shadow cursor-pointer">
-                      <CardContent className="p-3">
-                        <div className="flex items-start justify-between mb-2">
-                          <Badge variant="outline" className={`text-[10px] ${statusConfig[task.status].color}`}>{task.category}</Badge>
-                          <Flag className={`w-3 h-3 ${priorityColors[task.priority]}`} />
-                        </div>
-                        <p className="text-xs font-medium mb-2 line-clamp-2">{task.title}</p>
-                        {parseInt(task.id.slice(1)) % 3 !== 0 && (
-                          <div className="flex items-center gap-1 mb-2">
-                            <Sparkles className="w-3 h-3 text-primary" />
-                            <span className="text-[9px] text-primary font-medium">AI Generated</span>
-                          </div>
+              <Card key={task.id} className="hover:shadow-sm transition-shadow">
+                <CardContent className="p-4">
+                  <div className="flex items-start gap-3">
+                    {/* Status checkbox */}
+                    <button
+                      onClick={() =>
+                        task.status !== "completed" && updateTaskStatus(task.id, "completed")
+                      }
+                      className={`w-5 h-5 rounded border-2 shrink-0 mt-0.5 flex items-center justify-center transition-colors ${
+                        task.status === "completed"
+                          ? "bg-success border-success"
+                          : "border-muted-foreground/30 hover:border-primary"
+                      }`}
+                      title={task.status === "completed" ? "Completed" : "Mark complete"}
+                    >
+                      {task.status === "completed" && (
+                        <CheckSquare className="w-3 h-3 text-white" />
+                      )}
+                    </button>
+
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap mb-1">
+                        <p
+                          className={`text-sm font-medium ${
+                            task.status === "completed"
+                              ? "line-through text-muted-foreground"
+                              : "text-foreground"
+                          }`}
+                        >
+                          {task.title}
+                        </p>
+                        {task.is_ai_generated && (
+                          <span className="flex items-center gap-1 text-[10px] text-primary font-medium">
+                            <Sparkles className="w-3 h-3" /> AI
+                          </span>
                         )}
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-1.5">
-                            <Avatar className="w-5 h-5"><AvatarFallback className="text-[8px] bg-muted">{task.assignee.name.split(" ").map(n => n[0]).join("")}</AvatarFallback></Avatar>
-                            <span className="text-[10px] text-muted-foreground">{task.assignee.name.split(" ")[0]}</span>
-                          </div>
-                          <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                      </div>
+                      {task.description && (
+                        <p className="text-xs text-muted-foreground mb-2 leading-relaxed">
+                          {task.description}
+                        </p>
+                      )}
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <Badge variant="outline" className={`text-[9px] ${st.color}`}>
+                          {st.label}
+                        </Badge>
+                        {task.category && (
+                          <Badge variant="outline" className="text-[9px] bg-muted text-muted-foreground">
+                            {task.category}
+                          </Badge>
+                        )}
+                        {task.client_name && (
+                          <Badge
+                            variant="outline"
+                            className="text-[9px] bg-primary/5 text-primary border-primary/20 cursor-pointer"
+                            onClick={() => router.push("/clients")}
+                          >
+                            {task.client_name}
+                          </Badge>
+                        )}
+                        {task.due_date && (
+                          <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
                             <Calendar className="w-3 h-3" />
-                            {task.dueDate.slice(5)}
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              </div>
+                            Due {new Date(task.due_date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                          </span>
+                        )}
+                        {task.priority && (
+                          <Flag className={`w-3 h-3 ${PRIORITY_COLORS[task.priority] ?? "text-muted-foreground"}`} />
+                        )}
+                      </div>
+                    </div>
+
+                    {task.status === "blocked" && (
+                      <AlertCircle className="w-4 h-4 text-destructive shrink-0 mt-0.5" />
+                    )}
+                    {task.status === "in_progress" && (
+                      <Clock className="w-4 h-4 text-primary shrink-0 mt-0.5" />
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
             );
           })}
         </div>
-      ) : (
-        <Card className="overflow-hidden">
-          <Table>
-            <TableHeader>
-              <TableRow className="hover:bg-transparent">
-                <TableHead className="text-xs font-medium text-muted-foreground">Task</TableHead>
-                <TableHead className="text-xs font-medium text-muted-foreground">Status</TableHead>
-                <TableHead className="text-xs font-medium text-muted-foreground">Priority</TableHead>
-                <TableHead className="text-xs font-medium text-muted-foreground">Assignee</TableHead>
-                <TableHead className="text-xs font-medium text-muted-foreground">Client</TableHead>
-                <TableHead className="text-xs font-medium text-muted-foreground">Due Date</TableHead>
-                <TableHead className="text-xs font-medium text-muted-foreground">Category</TableHead>
-                <TableHead className="w-10"></TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {tasks.slice(0, 20).map((task) => (
-                <TableRow key={task.id} className="hover:bg-muted/50">
-                  <TableCell className="text-sm font-medium max-w-[200px] truncate">{task.title}</TableCell>
-                  <TableCell><Badge variant="outline" className={`text-[10px] ${statusConfig[task.status].color}`}>{statusConfig[task.status].label}</Badge></TableCell>
-                  <TableCell><div className="flex items-center gap-1"><Flag className={`w-3 h-3 ${priorityColors[task.priority]}`} /><span className="text-xs capitalize">{task.priority}</span></div></TableCell>
-                  <TableCell className="text-xs text-muted-foreground">{task.assignee.name}</TableCell>
-                  <TableCell className="text-xs text-muted-foreground">{task.client?.name}</TableCell>
-                  <TableCell className="text-xs text-muted-foreground">{task.dueDate}</TableCell>
-                  <TableCell className="text-xs text-muted-foreground">{task.category}</TableCell>
-                  <TableCell><Button variant="ghost" size="icon" className="h-7 w-7"><MoreHorizontal className="w-4 h-4" /></Button></TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </Card>
       )}
     </div>
   );

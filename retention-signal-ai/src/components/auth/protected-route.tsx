@@ -30,7 +30,11 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
     // Authenticated user lands on login or register → send to dashboard
     if (user && (pathname === "/login" || pathname === "/register")) {
       router.replace("/");
+      return;
     }
+
+    // Authenticated but not team_lead → show access denied (stay on current route,
+    // but we will render a blocking message in the UI below)
   }, [user, loading, pathname, isPublic, router]);
 
   // Splash screen while session is being restored
@@ -48,8 +52,40 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
   // Public routes always render
   if (isPublic) return <>{children}</>;
 
-  // Protected route — wait until we have a user (redirect is in-flight if not)
+  // Protected route — wait until we have a user
   if (!user) return null;
+
+  // Role check: only team_lead can access the Team Lead workspace
+  const role = user.role?.toLowerCase();
+  if (role && role !== "team_lead") {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-4 max-w-sm text-center px-6">
+          <div className="w-16 h-16 rounded-2xl bg-destructive/10 flex items-center justify-center">
+            <span className="text-2xl">🔒</span>
+          </div>
+          <h1 className="text-lg font-semibold text-foreground">Access Restricted</h1>
+          <p className="text-sm text-muted-foreground">
+            You do not have access to the Team Lead workspace. This application is only available
+            to users with the <strong>Team Lead</strong> role.
+          </p>
+          <p className="text-xs text-muted-foreground">
+            Your current role: <span className="font-medium text-foreground capitalize">{user.role}</span>
+          </p>
+          <button
+            onClick={async () => {
+              const { supabase } = await import("@/lib/supabase");
+              await supabase.auth.signOut();
+              window.location.href = "/login";
+            }}
+            className="mt-2 px-4 py-2 text-sm font-medium bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
+          >
+            Sign Out
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return <>{children}</>;
 }

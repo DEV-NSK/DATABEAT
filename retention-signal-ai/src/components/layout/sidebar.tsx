@@ -3,51 +3,36 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  LayoutDashboard, Users, FileText, Heart, TrendingUp, Shuffle,
+  LayoutDashboard, Users, FileText, TrendingUp,
   CheckSquare, BarChart3, Bell, Settings, LogOut, Moon, Sun, ChevronLeft,
-  Activity, ChevronDown
+  Activity, AlertTriangle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/contexts/auth-context";
 import { useTheme } from "next-themes";
-
-interface NavChild {
-  label: string;
-  href: string;
-  icon: React.ComponentType<{ className?: string }>;
-}
 
 interface NavItem {
   label?: string;
   href?: string;
   icon?: React.ComponentType<{ className?: string }>;
-  children?: NavChild[];
   sectionLabel?: string;
 }
 
 const navItems: NavItem[] = [
-  { label: "Command Center", href: "/", icon: LayoutDashboard },
-  { label: "Accounts", href: "/clients", icon: Users },
+  { label: "Dashboard", href: "/", icon: LayoutDashboard },
+  { label: "My Clients", href: "/clients", icon: Users },
+  { label: "Risk Signals", href: "/risk-signals", icon: AlertTriangle },
+  { label: "Opportunities", href: "/cross-sell", icon: TrendingUp },
   { label: "Weekly Reports", href: "/weekly-reports", icon: FileText },
-  { label: "Health Intelligence", href: "/account-health", icon: Heart },
-  {
-    label: "Growth Intelligence",
-    icon: TrendingUp,
-    children: [
-      { label: "Upsell Center", href: "/upsell", icon: TrendingUp },
-      { label: "Cross-Sell Center", href: "/cross-sell", icon: Shuffle },
-    ],
-  },
   { label: "Tasks", href: "/tasks", icon: CheckSquare },
   { label: "Reports", href: "/reports", icon: BarChart3 },
   { label: "Notifications", href: "/notifications", icon: Bell },
-  { sectionLabel: "Administration" },
-  { label: "Settings", href: "/settings", icon: Settings },
+  { sectionLabel: "Account" },
+  { label: "Profile", href: "/profile", icon: Settings },
 ];
 
 interface SidebarProps {
@@ -57,30 +42,17 @@ interface SidebarProps {
 
 export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const pathname = usePathname();
-  const { user, signOut } = useAuth();
+  const { user, manager, signOut } = useAuth();
   const { theme, setTheme } = useTheme();
-  const [expandedGroups, setExpandedGroups] = useState<string[]>(["Growth Intelligence"]);
 
   const isDark = theme === "dark";
   const toggleDark = () => setTheme(isDark ? "light" : "dark");
 
-  const toggleGroup = (label: string) => {
-    setExpandedGroups(prev =>
-      prev.includes(label) ? prev.filter(g => g !== label) : [...prev, label]
-    );
-  };
-
   const isItemActive = (href: string) =>
     pathname === href || (href !== "/" && pathname.startsWith(href));
 
-  const getInitials = (name: string) => {
-    return name
-      .split(" ")
-      .map(n => n[0])
-      .join("")
-      .toUpperCase()
-      .slice(0, 2);
-  };
+  const getInitials = (name: string) =>
+    name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2);
 
   const handleLogout = async () => {
     await signOut();
@@ -96,7 +68,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
       {/* Logo */}
       <div className="flex items-center gap-2.5 px-4 h-16 border-b border-border shrink-0">
         <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center shrink-0">
-          <Activity className="w-4.5 h-4.5 text-primary-foreground" />
+          <Activity className="w-4 h-4 text-primary-foreground" />
         </div>
         <AnimatePresence>
           {!collapsed && (
@@ -108,7 +80,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
               className="overflow-hidden"
             >
               <p className="text-sm font-semibold text-foreground whitespace-nowrap">Retention Signal</p>
-              <p className="text-[10px] text-muted-foreground whitespace-nowrap">Account Intelligence</p>
+              <p className="text-[10px] text-muted-foreground whitespace-nowrap">Team Lead Workspace</p>
             </motion.div>
           )}
         </AnimatePresence>
@@ -128,63 +100,6 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
             );
           }
 
-          if (item.children) {
-            const Icon = item.icon!;
-            const isExpanded = expandedGroups.includes(item.label!);
-            const anyChildActive = item.children.some(c => isItemActive(c.href));
-
-            return (
-              <div key={item.label}>
-                <button
-                  onClick={() => !collapsed && toggleGroup(item.label!)}
-                  className={cn(
-                    "w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm font-medium transition-colors",
-                    anyChildActive ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted hover:text-foreground",
-                    collapsed && "justify-center"
-                  )}
-                  title={collapsed ? item.label : undefined}
-                >
-                  <Icon className={cn("w-[18px] h-[18px] shrink-0", anyChildActive && "text-primary")} />
-                  {!collapsed && (
-                    <>
-                      <span className="whitespace-nowrap flex-1 text-left">{item.label}</span>
-                      <ChevronDown className={cn("w-3.5 h-3.5 transition-transform", isExpanded && "rotate-180")} />
-                    </>
-                  )}
-                </button>
-                <AnimatePresence>
-                  {isExpanded && !collapsed && (
-                    <motion.div
-                      initial={{ height: 0, opacity: 0 }}
-                      animate={{ height: "auto", opacity: 1 }}
-                      exit={{ height: 0, opacity: 0 }}
-                      transition={{ duration: 0.15 }}
-                      className="overflow-hidden ml-4 space-y-0.5 mt-0.5"
-                    >
-                      {item.children.map((child) => {
-                        const ChildIcon = child.icon;
-                        const active = isItemActive(child.href);
-                        return (
-                          <Link
-                            key={child.href}
-                            href={child.href}
-                            className={cn(
-                              "flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors relative",
-                              active ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                            )}
-                          >
-                            <ChildIcon className="w-3.5 h-3.5 shrink-0" />
-                            <span className="whitespace-nowrap">{child.label}</span>
-                          </Link>
-                        );
-                      })}
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
-            );
-          }
-
           const Icon = item.icon!;
           const isActive = item.href ? isItemActive(item.href) : false;
 
@@ -194,7 +109,9 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
               href={item.href!}
               className={cn(
                 "flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm font-medium transition-colors group relative",
-                isActive ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                isActive
+                  ? "bg-primary/10 text-primary"
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
               )}
               title={collapsed ? item.label : undefined}
             >
@@ -227,33 +144,65 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
       <Separator />
 
       <div className="p-2.5 space-y-1 shrink-0">
-        <div className={cn("flex items-center gap-2.5 px-2.5 py-2 rounded-lg hover:bg-muted cursor-pointer", collapsed && "justify-center")}>
-          <Avatar className="w-7 h-7">
+        {/* User info */}
+        <div
+          className={cn(
+            "flex items-center gap-2.5 px-2.5 py-2 rounded-lg hover:bg-muted cursor-pointer",
+            collapsed && "justify-center"
+          )}
+        >
+          <Avatar className="w-7 h-7 shrink-0">
             <AvatarFallback className="text-xs bg-primary/10 text-primary font-semibold">
               {user ? getInitials(user.full_name) : "U"}
             </AvatarFallback>
           </Avatar>
           <AnimatePresence>
             {!collapsed && (
-              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex-1 min-w-0">
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="flex-1 min-w-0"
+              >
                 <p className="text-xs font-medium text-foreground truncate">{user?.full_name || "User"}</p>
-                <p className="text-[10px] text-muted-foreground truncate">{user?.designation || user?.role || "Manager"}</p>
+                <p className="text-[10px] text-muted-foreground truncate">Team Lead</p>
+                {manager && (
+                  <p className="text-[10px] text-muted-foreground truncate">Mgr: {manager.full_name}</p>
+                )}
               </motion.div>
             )}
           </AnimatePresence>
         </div>
 
-        <Button variant="ghost" size="sm" onClick={toggleDark} className={cn("w-full justify-start gap-2.5 text-muted-foreground", collapsed && "justify-center px-0")}>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={toggleDark}
+          className={cn("w-full justify-start gap-2.5 text-muted-foreground", collapsed && "justify-center px-0")}
+        >
           {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
           {!collapsed && <span className="text-xs">{isDark ? "Light mode" : "Dark mode"}</span>}
         </Button>
 
-        <Button variant="ghost" size="sm" onClick={onToggle} className={cn("w-full justify-start gap-2.5 text-muted-foreground", collapsed && "justify-center px-0")}>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={onToggle}
+          className={cn("w-full justify-start gap-2.5 text-muted-foreground", collapsed && "justify-center px-0")}
+        >
           <ChevronLeft className={cn("w-4 h-4 transition-transform", collapsed && "rotate-180")} />
           {!collapsed && <span className="text-xs">Collapse</span>}
         </Button>
 
-        <Button variant="ghost" size="sm" onClick={handleLogout} className={cn("w-full justify-start gap-2.5 text-muted-foreground hover:text-destructive", collapsed && "justify-center px-0")}>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={handleLogout}
+          className={cn(
+            "w-full justify-start gap-2.5 text-muted-foreground hover:text-destructive",
+            collapsed && "justify-center px-0"
+          )}
+        >
           <LogOut className="w-4 h-4" />
           {!collapsed && <span className="text-xs">Logout</span>}
         </Button>

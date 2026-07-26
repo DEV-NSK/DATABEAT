@@ -27,6 +27,7 @@ export interface HealthScoreRow {
 
 export interface HealthKPIs {
   totalReports: number;
+  totalClients: number;       // unique companies
   latestScore: number | null;
   latestGrade: string | null;
   latestRisk: string | null;
@@ -35,8 +36,9 @@ export interface HealthKPIs {
   latestConfidence: number | null;
   scoreTrend: number | null; // diff between latest and previous
   healthyCount: number;   // score >= 80
-  warningCount: number;   // 60-79
-  criticalCount: number;  // < 60
+  warningCount: number;   // 65-79
+  atRiskCount: number;    // 45-64
+  criticalCount: number;  // < 45
   avgScore: number | null;
 }
 
@@ -57,6 +59,7 @@ export interface UseHealthScoresResult {
 
 const EMPTY_KPIS: HealthKPIs = {
   totalReports: 0,
+  totalClients: 0,
   latestScore: null,
   latestGrade: null,
   latestRisk: null,
@@ -66,6 +69,7 @@ const EMPTY_KPIS: HealthKPIs = {
   scoreTrend: null,
   healthyCount: 0,
   warningCount: 0,
+  atRiskCount: 0,
   criticalCount: 0,
   avgScore: null,
 };
@@ -141,20 +145,36 @@ export function useHealthScores(): UseHealthScoresResult {
       ? Math.round(latest.overall_health_score - previous.overall_health_score)
       : null;
 
-  const healthyCount = rows.filter((r) => r.overall_health_score >= 80).length;
-  const warningCount = rows.filter(
-    (r) => r.overall_health_score >= 60 && r.overall_health_score < 80
+  // Deduplicate by company for unique client counts
+  const seenCompanies = new Set<string>();
+  const latestPerCompany: HealthScoreRow[] = [];
+  for (const r of rows) {
+    const key = (r.company_name || "").toLowerCase();
+    if (!seenCompanies.has(key)) {
+      seenCompanies.add(key);
+      latestPerCompany.push(r);
+    }
+  }
+  const totalClients = latestPerCompany.length;
+
+  const healthyCount = latestPerCompany.filter((r) => r.overall_health_score >= 80).length;
+  const warningCount = latestPerCompany.filter(
+    (r) => r.overall_health_score >= 65 && r.overall_health_score < 80
   ).length;
-  const criticalCount = rows.filter((r) => r.overall_health_score < 60).length;
+  const atRiskCount = latestPerCompany.filter(
+    (r) => r.overall_health_score >= 45 && r.overall_health_score < 65
+  ).length;
+  const criticalCount = latestPerCompany.filter((r) => r.overall_health_score < 45).length;
 
   const avgScore =
-    rows.length > 0
-      ? Math.round(rows.reduce((s, r) => s + r.overall_health_score, 0) / rows.length)
+    latestPerCompany.length > 0
+      ? Math.round(latestPerCompany.reduce((s, r) => s + r.overall_health_score, 0) / latestPerCompany.length)
       : null;
 
   const kpis: HealthKPIs = latest
     ? {
         totalReports: rows.length,
+        totalClients,
         latestScore: latest.overall_health_score,
         latestGrade: latest.health_grade,
         latestRisk: latest.risk_level,
@@ -164,6 +184,7 @@ export function useHealthScores(): UseHealthScoresResult {
         scoreTrend,
         healthyCount,
         warningCount,
+        atRiskCount,
         criticalCount,
         avgScore,
       }

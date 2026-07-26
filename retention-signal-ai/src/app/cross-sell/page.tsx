@@ -5,24 +5,11 @@ import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
-  TrendingUp,
-  Sparkles,
-  CheckSquare,
-  RefreshCw,
-  DollarSign,
-  Target,
-  Zap,
-  CheckCircle2,
-  AlertCircle,
-  Clock,
-  ChevronRight,
-  Building2,
-  User,
-  FileText,
-  Calendar,
+  TrendingUp, Sparkles, RefreshCw, DollarSign, Target,
+  CheckCircle2, AlertCircle, Clock, ChevronRight, Building2, Calendar,
 } from "lucide-react";
-import { SkeletonCard } from "@/components/shared/skeleton-loader";
 import { EmptyState } from "@/components/shared/empty-state";
 import { ErrorState } from "@/components/shared/error-state";
 import { supabase } from "@/lib/supabase";
@@ -42,7 +29,6 @@ interface ClientCrossSell {
   confidence_score: number;
   executive_summary: string;
   recommended_services: string[] | string;
-  business_signals: string[] | string;
   reasons: string[] | string;
   next_actions: string[] | string;
   priority: string;
@@ -53,7 +39,6 @@ interface ClientCrossSell {
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
-/** JSON/jsonb fields may arrive as a string — normalise to array */
 function toArray(value: unknown): string[] {
   if (!value) return [];
   if (Array.isArray(value)) return value as string[];
@@ -61,24 +46,18 @@ function toArray(value: unknown): string[] {
     try {
       const parsed = JSON.parse(value);
       if (Array.isArray(parsed)) return parsed as string[];
-    } catch {
-      return [value];
-    }
+    } catch { return [value]; }
   }
   return [];
 }
 
 function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
+  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
 function formatCurrency(value: number | string): string {
   const num = typeof value === "string" ? parseFloat(value) : value;
-  if (isNaN(num)) return "$0";
+  if (isNaN(num) || !num) return "—";
   if (num >= 1_000_000) return `$${(num / 1_000_000).toFixed(1)}M`;
   if (num >= 1_000) return `$${(num / 1_000).toFixed(0)}K`;
   return `$${num.toLocaleString()}`;
@@ -101,563 +80,316 @@ function getPriorityBadge(priority: string): string {
   return "bg-muted text-muted-foreground border-border";
 }
 
-function getDecisionColor(decision: string): { bg: string; text: string; border: string; icon: typeof CheckCircle2 } {
+function getDecisionIcon(decision: string): typeof CheckCircle2 {
   const d = decision?.toLowerCase();
-  if (d?.includes("strong")) return { bg: "bg-success/10", text: "text-success", border: "border-success/20", icon: CheckCircle2 };
-  if (d?.includes("possible")) return { bg: "bg-warning/10", text: "text-warning", border: "border-warning/20", icon: AlertCircle };
-  return { bg: "bg-muted", text: "text-muted-foreground", border: "border-border", icon: Clock };
+  if (d?.includes("strong")) return CheckCircle2;
+  if (d?.includes("possible")) return AlertCircle;
+  return Clock;
 }
 
-function getCrossSellScoreColor(score: number): string {
-  if (score > 80) return "#10b981"; // green
-  if (score >= 60) return "#f59e0b"; // yellow
-  if (score >= 40) return "#f97316"; // orange
-  return "#ef4444"; // red
-}
+// ─── Opportunity Card ──────────────────────────────────────────────────────
 
-function getCrossSellScoreLabel(score: number): string {
-  if (score > 80) return "Excellent";
-  if (score >= 60) return "Good";
-  if (score >= 40) return "Fair";
-  return "Low";
-}
-
-// ─── Circular Progress ─────────────────────────────────────────────────────
-
-function CircularProgress({ score }: { score: number }) {
-  const size = 128;
-  const strokeWidth = 12;
-  const radius = (size - strokeWidth) / 2;
-  const circumference = 2 * Math.PI * radius;
-  const offset = circumference - (score / 100) * circumference;
-  const color = getCrossSellScoreColor(score);
-  const label = getCrossSellScoreLabel(score);
+function OpportunityCard({ row, onClick }: { row: ClientCrossSell; onClick: () => void }) {
+  const services = toArray(row.recommended_services);
+  const reasons = toArray(row.reasons);
+  const DecisionIcon = getDecisionIcon(row.decision);
 
   return (
-    <div className="flex flex-col items-center gap-2">
-      <div className="relative" style={{ width: size, height: size }}>
-        <svg width={size} height={size} className="-rotate-90">
-          <circle
-            cx={size / 2}
-            cy={size / 2}
-            r={radius}
-            fill="none"
-            stroke="currentColor"
-            className="text-muted/50"
-            strokeWidth={strokeWidth}
-          />
-          <circle
-            cx={size / 2}
-            cy={size / 2}
-            r={radius}
-            fill="none"
-            stroke={color}
-            strokeWidth={strokeWidth}
-            strokeLinecap="round"
-            strokeDasharray={circumference}
-            strokeDashoffset={offset}
-            style={{ transition: "stroke-dashoffset 0.7s ease" }}
-          />
-        </svg>
-        <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className="text-3xl font-bold">{score}</span>
-          <span className="text-[10px] text-muted-foreground">/100</span>
+    <Card
+      className="hover:shadow-sm transition-shadow cursor-pointer hover:border-primary/20"
+      onClick={onClick}
+    >
+      <CardContent className="p-5">
+        {/* Header */}
+        <div className="flex items-start justify-between gap-3 mb-4">
+          <div className="flex items-start gap-3 flex-1 min-w-0">
+            <div className="w-10 h-10 rounded-xl bg-success/10 flex items-center justify-center shrink-0">
+              <TrendingUp className="w-5 h-5 text-success" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap mb-1">
+                <p className="text-sm font-semibold text-foreground truncate">
+                  {row.company_name || "Unknown Client"}
+                </p>
+                <Badge
+                  variant="outline"
+                  className={`text-[10px] shrink-0 ${getOpportunityLevelBadge(row.opportunity_level)}`}
+                >
+                  {row.opportunity_level || "—"} Opportunity
+                </Badge>
+              </div>
+              <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
+                <span className="flex items-center gap-1">
+                  <Calendar className="w-3 h-3" />
+                  {formatDate(row.created_at)}
+                </span>
+              </div>
+            </div>
+          </div>
+          <div className="text-right shrink-0">
+            <p className="text-lg font-bold text-success">{formatCurrency(row.potential_revenue)}</p>
+            <p className="text-[10px] text-muted-foreground">Potential Revenue</p>
+          </div>
         </div>
-      </div>
-      <Badge
-        variant="outline"
-        style={{ color, borderColor: `${color}33`, backgroundColor: `${color}1a` }}
-        className="text-[10px]"
-      >
-        {label}
-      </Badge>
-    </div>
-  );
-}
 
-// ─── Page Skeleton ─────────────────────────────────────────────────────────
+        {/* Recommended Services */}
+        {services.length > 0 && (
+          <div className="mb-3">
+            <p className="text-[10px] text-muted-foreground mb-1.5 font-medium uppercase tracking-wide">
+              Recommended Products
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {services.slice(0, 3).map((svc, i) => (
+                <span
+                  key={i}
+                  className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-primary/5 text-primary border border-primary/10"
+                >
+                  {svc}
+                </span>
+              ))}
+              {services.length > 3 && (
+                <span className="text-[10px] text-muted-foreground self-center">
+                  +{services.length - 3} more
+                </span>
+              )}
+            </div>
+          </div>
+        )}
 
-function CrossSellPageSkeleton() {
-  return (
-    <div className="space-y-6 animate-pulse">
-      <div className="h-5 bg-muted rounded w-64" />
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {Array.from({ length: 4 }).map((_, i) => (
-          <SkeletonCard key={i} />
-        ))}
-      </div>
-      <SkeletonCard />
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <SkeletonCard />
-        <SkeletonCard />
-      </div>
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <SkeletonCard />
-        <SkeletonCard />
-      </div>
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <SkeletonCard />
-        <SkeletonCard />
-      </div>
-    </div>
+        {/* Reason */}
+        {reasons[0] && (
+          <p className="text-xs text-muted-foreground mb-3 leading-relaxed">
+            {reasons[0]}
+          </p>
+        )}
+
+        {/* Footer metrics */}
+        <div className="flex items-center justify-between pt-3 border-t border-border">
+          <div className="flex items-center gap-3">
+            {/* Confidence */}
+            <div className="flex items-center gap-1.5">
+              <Sparkles className="w-3.5 h-3.5 text-warning" />
+              <span className="text-xs font-semibold">{row.confidence_score ?? 0}%</span>
+              <span className="text-[10px] text-muted-foreground">confidence</span>
+            </div>
+            {/* Priority */}
+            <Badge variant="outline" className={`text-[9px] ${getPriorityBadge(row.priority)}`}>
+              {row.priority || "—"}
+            </Badge>
+          </div>
+          {/* Decision */}
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <DecisionIcon className="w-3.5 h-3.5" />
+            <span className="truncate max-w-[120px]">{row.decision || "—"}</span>
+            <ChevronRight className="w-3.5 h-3.5" />
+          </div>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
 // ─── Page ─────────────────────────────────────────────────────────────────
 
-export default function CrossSellPage() {
+export default function OpportunitiesPage() {
   const { user } = useAuth();
   const router = useRouter();
 
-  const [latest, setLatest] = useState<ClientCrossSell | null>(null);
+  const [rows, setRows] = useState<ClientCrossSell[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [filterLevel, setFilterLevel] = useState<"all" | "high" | "medium" | "low">("all");
 
-  // ── Fetch ─────────────────────────────────────────────────────────────
-
-  const fetchCrossSellData = useCallback(async () => {
+  const fetchData = useCallback(async () => {
     if (!user) return;
-
     setLoading(true);
     setError(null);
-
     try {
       const { data, error: dbError } = await supabase
         .from("client_cross_sell")
         .select("*")
         .eq("user_id", user.id)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
+        .order("confidence_score", { ascending: false });
 
       if (dbError) throw dbError;
-
-      setLatest(data as ClientCrossSell | null);
+      setRows((data ?? []) as ClientCrossSell[]);
     } catch (err: unknown) {
       console.error("Cross-sell fetch error:", err);
-      setError("Unable to load Cross Sell Intelligence. Please try again.");
+      setError("Unable to load opportunities. Please try again.");
     } finally {
       setLoading(false);
     }
   }, [user]);
 
-  // Initial load
-  useEffect(() => {
-    fetchCrossSellData();
-  }, [fetchCrossSellData]);
+  useEffect(() => { fetchData(); }, [fetchData]);
 
-  // ── Realtime subscription ─────────────────────────────────────────────
-
+  // Realtime subscription
   useEffect(() => {
     if (!user) return;
-
     const channel = supabase
-      .channel("cross-sell-realtime")
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "client_cross_sell",
-          filter: `user_id=eq.${user.id}`,
-        },
-        () => {
-          fetchCrossSellData();
-        }
-      )
+      .channel("cross-sell-list-rt")
+      .on("postgres_changes", {
+        event: "INSERT",
+        schema: "public",
+        table: "client_cross_sell",
+        filter: `user_id=eq.${user.id}`,
+      }, () => fetchData())
       .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [user, fetchData]);
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [user, fetchCrossSellData]);
+  const filtered = rows.filter((r) => {
+    if (filterLevel === "all") return true;
+    return (r.opportunity_level || "").toLowerCase() === filterLevel;
+  });
 
-  // ── Loading ───────────────────────────────────────────────────────────
+  const highCount = rows.filter((r) => (r.opportunity_level || "").toLowerCase() === "high").length;
+  const medCount = rows.filter((r) => (r.opportunity_level || "").toLowerCase() === "medium").length;
+  const lowCount = rows.filter((r) => (r.opportunity_level || "").toLowerCase() === "low").length;
 
-  if (loading) return <CrossSellPageSkeleton />;
-
-  // ── Error ─────────────────────────────────────────────────────────────
+  const totalRevenue = rows.reduce((sum, r) => {
+    const val = typeof r.potential_revenue === "string" ? parseFloat(r.potential_revenue) : r.potential_revenue;
+    return sum + (isNaN(val) ? 0 : val);
+  }, 0);
 
   if (error) {
     return (
       <div className="space-y-6">
         <div>
-          <h1 className="text-xl font-semibold text-foreground">AI Cross Sell Intelligence</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            AI-generated business expansion opportunities based on uploaded client reports.
-          </p>
+          <h1 className="text-xl font-semibold text-foreground">Opportunities</h1>
         </div>
-        <ErrorState
-          title="Unable to load Cross Sell Intelligence"
-          description={error}
-          onRetry={fetchCrossSellData}
-        />
+        <ErrorState title="Unable to load opportunities" description={error} onRetry={fetchData} />
       </div>
     );
   }
-
-  // ── Empty ─────────────────────────────────────────────────────────────
-
-  if (!latest) {
-    return (
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-xl font-semibold text-foreground">AI Cross Sell Intelligence</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            AI-generated business expansion opportunities based on uploaded client reports.
-          </p>
-        </div>
-        <Card>
-          <CardContent className="p-0">
-            <EmptyState
-              icon="sparkles"
-              title="No AI Cross Sell Analysis Available"
-              description="Upload a Weekly Report to generate Cross Sell Intelligence."
-              action={{
-                label: "Go to Weekly Reports",
-                onClick: () => router.push("/weekly-reports"),
-              }}
-            />
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
-  // ── Normalise arrays ──────────────────────────────────────────────────
-
-  const recommendedServices = toArray(latest.recommended_services);
-  const businessSignals = toArray(latest.business_signals);
-  const reasons = toArray(latest.reasons);
-  const nextActions = toArray(latest.next_actions);
-
-  const decisionStyle = getDecisionColor(latest.decision);
-  const DecisionIcon = decisionStyle.icon;
-
-  // ── Render ────────────────────────────────────────────────────────────
 
   return (
     <div className="space-y-6">
-      {/* ── Header ── */}
+      {/* Header */}
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-xl font-semibold text-foreground">AI Cross Sell Intelligence</h1>
+          <h1 className="text-xl font-semibold text-foreground">Opportunities</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            AI-generated business expansion opportunities based on uploaded client reports.
+            AI-generated cross-sell and expansion opportunities from your assigned clients
           </p>
         </div>
         <Button
           variant="outline"
           size="sm"
           className="h-8 text-xs gap-1.5"
-          onClick={fetchCrossSellData}
+          onClick={fetchData}
+          disabled={loading}
         >
-          <RefreshCw className="w-3.5 h-3.5" />
+          <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
           Refresh
         </Button>
       </div>
 
-      {/* ── Client Info Banner ── */}
-      <Card>
-        <CardContent className="p-4">
-          <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-muted-foreground">
-            {latest.company_name && (
-              <span className="flex items-center gap-1.5">
-                <Building2 className="w-3.5 h-3.5" />
-                <span className="font-medium text-foreground">{latest.company_name}</span>
-              </span>
-            )}
-            {latest.uploaded_by && (
-              <span className="flex items-center gap-1.5">
-                <User className="w-3.5 h-3.5" />
-                {latest.uploaded_by}
-              </span>
-            )}
-            {latest.report_id && (
-              <span className="flex items-center gap-1.5">
-                <FileText className="w-3.5 h-3.5" />
-                {latest.report_id}
-              </span>
-            )}
-            <span className="flex items-center gap-1.5">
-              <Calendar className="w-3.5 h-3.5" />
-              {formatDate(latest.created_at)}
-            </span>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* ── KPI Row ── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Card 1 — Opportunity Score */}
+      {/* KPI Strip */}
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
         <Card>
-          <CardContent className="p-5 flex flex-col items-center">
-            <p className="text-xs font-medium text-muted-foreground mb-3">Opportunity Score</p>
-            <CircularProgress score={latest.cross_sell_score ?? 0} />
-          </CardContent>
-        </Card>
-
-        {/* Card 2 — Opportunity Level */}
-        <Card>
-          <CardContent className="p-5">
-            <div className="flex items-center justify-between mb-3">
-              <p className="text-xs font-medium text-muted-foreground">Opportunity Level</p>
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
               <Target className="w-4 h-4 text-primary" />
             </div>
-            <div className="flex items-center gap-2 mt-4">
-              <Badge
-                variant="outline"
-                className={`text-sm font-semibold px-3 py-1 ${getOpportunityLevelBadge(latest.opportunity_level)}`}
-              >
-                {latest.opportunity_level || "—"}
-              </Badge>
+            <div>
+              <p className="text-xl font-bold">{loading ? "—" : rows.length}</p>
+              <p className="text-xs text-muted-foreground">Total Opportunities</p>
             </div>
-            <p className="text-[10px] text-muted-foreground mt-3">
-              AI-assessed opportunity tier
-            </p>
           </CardContent>
         </Card>
-
-        {/* Card 3 — Potential Revenue */}
         <Card>
-          <CardContent className="p-5">
-            <div className="flex items-center justify-between mb-3">
-              <p className="text-xs font-medium text-muted-foreground">Potential Revenue</p>
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-success/10 flex items-center justify-center shrink-0">
+              <TrendingUp className="w-4 h-4 text-success" />
+            </div>
+            <div>
+              <p className="text-xl font-bold text-success">{loading ? "—" : highCount}</p>
+              <p className="text-xs text-muted-foreground">High Opportunity</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-warning/10 flex items-center justify-center shrink-0">
+              <AlertCircle className="w-4 h-4 text-warning" />
+            </div>
+            <div>
+              <p className="text-xl font-bold text-warning">{loading ? "—" : medCount}</p>
+              <p className="text-xs text-muted-foreground">Medium Opportunity</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-success/10 flex items-center justify-center shrink-0">
               <DollarSign className="w-4 h-4 text-success" />
             </div>
-            <p className="text-3xl font-bold text-success mt-2">
-              {formatCurrency(latest.potential_revenue)}
-            </p>
-            <p className="text-[10px] text-muted-foreground mt-2">
-              Estimated expansion value
-            </p>
-          </CardContent>
-        </Card>
-
-        {/* Card 4 — Confidence */}
-        <Card>
-          <CardContent className="p-5">
-            <div className="flex items-center justify-between mb-3">
-              <p className="text-xs font-medium text-muted-foreground">Confidence</p>
-              <Sparkles className="w-4 h-4 text-warning" />
+            <div>
+              <p className="text-xl font-bold text-success">{loading ? "—" : formatCurrency(totalRevenue)}</p>
+              <p className="text-xs text-muted-foreground">Total Potential Revenue</p>
             </div>
-            <p className="text-3xl font-bold text-warning">
-              {latest.confidence_score ?? 0}
-              <span className="text-sm font-normal text-muted-foreground">%</span>
-            </p>
-            <div className="h-1.5 bg-muted rounded-full overflow-hidden mt-3">
-              <div
-                className="h-full rounded-full bg-warning transition-all duration-700"
-                style={{ width: `${latest.confidence_score ?? 0}%` }}
-              />
-            </div>
-            <p className="text-[10px] text-muted-foreground mt-2">AI prediction confidence</p>
           </CardContent>
         </Card>
       </div>
 
-      {/* ── Executive Summary ── */}
-      <Card className="border-primary/20 bg-primary/5">
-        <CardContent className="p-5">
-          <div className="flex items-start gap-3">
-            <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
-              <Sparkles className="w-4 h-4 text-primary" />
-            </div>
-            <div className="flex-1">
-              <h3 className="text-sm font-semibold mb-2">AI Executive Summary</h3>
-              <p className="text-xs text-muted-foreground leading-relaxed">
-                {latest.executive_summary || "No summary available."}
-              </p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* ── Recommended Services + Business Signals ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Recommended Services */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-semibold flex items-center gap-2">
-              <TrendingUp className="w-4 h-4 text-primary" />
-              Recommended Services
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {recommendedServices.length === 0 ? (
-              <p className="text-xs text-muted-foreground py-4 text-center">
-                No recommended services
-              </p>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {recommendedServices.map((service, i) => (
-                  <div
-                    key={i}
-                    className="flex items-center gap-2.5 p-3 rounded-lg border border-border bg-muted/30 hover:bg-muted/60 transition-colors"
-                  >
-                    <div className="w-5 h-5 rounded-full bg-success/10 flex items-center justify-center shrink-0">
-                      <CheckCircle2 className="w-3 h-3 text-success" />
-                    </div>
-                    <p className="text-xs font-medium text-foreground leading-snug">{service}</p>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Business Signals */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-semibold flex items-center gap-2">
-              <Zap className="w-4 h-4 text-warning" />
-              Business Signals
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {businessSignals.length === 0 ? (
-              <p className="text-xs text-muted-foreground py-4 text-center">
-                No business signals detected
-              </p>
-            ) : (
-              <div className="space-y-2">
-                {businessSignals.map((signal, i) => (
-                  <div
-                    key={i}
-                    className="flex items-start gap-3 p-2.5 rounded-lg bg-warning/5 border border-warning/10"
-                  >
-                    <div className="flex items-center gap-1.5 shrink-0 mt-0.5">
-                      <div className="w-1.5 h-1.5 rounded-full bg-warning" />
-                      <span className="text-[10px] text-muted-foreground font-mono">{String(i + 1).padStart(2, "0")}</span>
-                    </div>
-                    <p className="text-xs text-foreground leading-relaxed">{signal}</p>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+      {/* Filters */}
+      <div className="flex items-center gap-1 flex-wrap">
+        {(["all", "high", "medium", "low"] as const).map((f) => (
+          <button
+            key={f}
+            onClick={() => setFilterLevel(f)}
+            className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
+              filterLevel === f
+                ? "bg-primary text-primary-foreground"
+                : "bg-muted text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {f === "all" ? "All" : f.charAt(0).toUpperCase() + f.slice(1)}
+            {f === "high" && ` (${highCount})`}
+            {f === "medium" && ` (${medCount})`}
+            {f === "low" && ` (${lowCount})`}
+          </button>
+        ))}
       </div>
 
-      {/* ── Reasons + Next Actions ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Reasons */}
+      {/* Opportunity Cards */}
+      {loading ? (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {[1, 2, 3, 4].map((i) => (
+            <Skeleton key={i} className="h-48 w-full rounded-xl" />
+          ))}
+        </div>
+      ) : filtered.length === 0 ? (
         <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-semibold flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 text-muted-foreground" />
-              Reasons for Opportunity
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {reasons.length === 0 ? (
-              <p className="text-xs text-muted-foreground py-4 text-center">
-                No reasons listed
-              </p>
-            ) : (
-              <ul className="space-y-2">
-                {reasons.map((reason, i) => (
-                  <li
-                    key={i}
-                    className="flex items-start gap-2.5"
-                  >
-                    <ChevronRight className="w-3.5 h-3.5 text-primary shrink-0 mt-0.5" />
-                    <p className="text-xs text-foreground leading-relaxed">{reason}</p>
-                  </li>
-                ))}
-              </ul>
-            )}
+          <CardContent className="p-0">
+            <EmptyState
+              icon="sparkles"
+              title={filterLevel === "all" ? "No opportunities yet" : `No ${filterLevel} opportunities`}
+              description={
+                filterLevel === "all"
+                  ? "Upload a weekly report to generate AI-powered expansion opportunities for your clients."
+                  : "No opportunities match this level."
+              }
+              action={
+                filterLevel === "all"
+                  ? { label: "Upload Weekly Report", onClick: () => router.push("/weekly-reports") }
+                  : undefined
+              }
+            />
           </CardContent>
         </Card>
-
-        {/* Next Actions */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-semibold flex items-center gap-2">
-              <CheckSquare className="w-4 h-4 text-primary" />
-              Next Actions
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {nextActions.length === 0 ? (
-              <p className="text-xs text-muted-foreground py-4 text-center">
-                No actions defined
-              </p>
-            ) : (
-              <div className="space-y-2">
-                {nextActions.map((action, i) => (
-                  <div
-                    key={i}
-                    className="flex items-start gap-3 p-3 rounded-lg border border-border hover:bg-muted/50 transition-colors"
-                  >
-                    <div className="w-5 h-5 rounded border-2 border-primary/30 shrink-0 mt-0.5 flex items-center justify-center">
-                      <span className="text-[9px] font-bold text-primary">{i + 1}</span>
-                    </div>
-                    <p className="text-xs text-foreground leading-relaxed">{action}</p>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* ── Priority + Decision + Status ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Priority */}
-        <Card>
-          <CardContent className="p-5">
-            <div className="flex items-center justify-between mb-3">
-              <p className="text-xs font-medium text-muted-foreground">Priority</p>
-              <AlertCircle className="w-4 h-4 text-muted-foreground" />
-            </div>
-            <Badge
-              variant="outline"
-              className={`text-sm font-semibold px-3 py-1 ${getPriorityBadge(latest.priority)}`}
-            >
-              {latest.priority || "—"}
-            </Badge>
-            <p className="text-[10px] text-muted-foreground mt-2">
-              Execution urgency level
-            </p>
-          </CardContent>
-        </Card>
-
-        {/* Decision */}
-        <Card className={`${decisionStyle.bg} ${decisionStyle.border} border`}>
-          <CardContent className="p-5">
-            <div className="flex items-center justify-between mb-3">
-              <p className="text-xs font-medium text-muted-foreground">Decision</p>
-              <DecisionIcon className={`w-4 h-4 ${decisionStyle.text}`} />
-            </div>
-            <p className={`text-lg font-bold ${decisionStyle.text}`}>
-              {latest.decision || "—"}
-            </p>
-            <p className="text-[10px] text-muted-foreground mt-2">
-              AI recommendation outcome
-            </p>
-          </CardContent>
-        </Card>
-
-        {/* Status */}
-        <Card>
-          <CardContent className="p-5">
-            <div className="flex items-center justify-between mb-3">
-              <p className="text-xs font-medium text-muted-foreground">Status</p>
-              <Clock className="w-4 h-4 text-muted-foreground" />
-            </div>
-            <Badge
-              variant="outline"
-              className="text-sm font-semibold px-3 py-1 bg-primary/10 text-primary border-primary/20"
-            >
-              {latest.status || "—"}
-            </Badge>
-            <p className="text-[10px] text-muted-foreground mt-2">
-              Current processing state
-            </p>
-          </CardContent>
-        </Card>
-      </div>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {filtered.map((row) => (
+            <OpportunityCard
+              key={row.id}
+              row={row}
+              onClick={() => router.push(`/clients/${row.id}`)}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

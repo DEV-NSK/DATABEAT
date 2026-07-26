@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
-import type { UserProfile, AuthContextType, AuthState, SignUpData } from "@/lib/types";
+import type { UserProfile, ManagerProfile, AuthContextType, AuthState, SignUpData } from "@/lib/types";
 import { toast } from "sonner";
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -21,6 +21,20 @@ async function fetchProfile(userId: string): Promise<UserProfile | null> {
     return null;
   }
   return data as UserProfile;
+}
+
+async function fetchManager(managerId: string): Promise<ManagerProfile | null> {
+  if (!managerId) return null;
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("id, full_name, email, role")
+    .eq("id", managerId)
+    .single();
+  if (error) {
+    console.error("fetchManager error:", error.message);
+    return null;
+  }
+  return data as ManagerProfile;
 }
 
 /**
@@ -45,9 +59,20 @@ async function fetchProfileWithRetry(
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<AuthState>({
     user: null,
+    manager: null,
     loading: true,
     error: null,
   });
+
+  // Helper: load profile + manager together
+  const loadUserAndManager = async (userId: string): Promise<{ user: UserProfile | null; manager: ManagerProfile | null }> => {
+    const profile = await fetchProfile(userId);
+    let manager: ManagerProfile | null = null;
+    if (profile?.manager_id) {
+      manager = await fetchManager(profile.manager_id);
+    }
+    return { user: profile, manager };
+  };
 
   // ── Session restore on mount ──────────────────────────────────────────────
   useEffect(() => {
@@ -58,14 +83,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const { data: { session } } = await supabase.auth.getSession();
 
         if (session?.user && mounted) {
-          const profile = await fetchProfile(session.user.id);
-          if (mounted) setState({ user: profile, loading: false, error: null });
+          const { user, manager } = await loadUserAndManager(session.user.id);
+          if (mounted) setState({ user, manager, loading: false, error: null });
         } else if (mounted) {
-          setState({ user: null, loading: false, error: null });
+          setState({ user: null, manager: null, loading: false, error: null });
         }
       } catch (err) {
         console.error("Auth init error:", err);
-        if (mounted) setState({ user: null, loading: false, error: "Failed to restore session" });
+        if (mounted) setState({ user: null, manager: null, loading: false, error: "Failed to restore session" });
       }
     };
 
@@ -77,8 +102,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (!mounted) return;
 
         if (event === "SIGNED_IN" && session?.user) {
-          const profile = await fetchProfile(session.user.id);
-          setState({ user: profile, loading: false, error: null });
+          const { user, manager } = await loadUserAndManager(session.user.id);
+          setState({ user, manager, loading: false, error: null });
 
           // Refresh last_login (best-effort)
           supabase
@@ -88,14 +113,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             .then(() => {});
 
         } else if (event === "SIGNED_OUT") {
-          setState({ user: null, loading: false, error: null });
+          setState({ user: null, manager: null, loading: false, error: null });
 
         } else if (event === "PASSWORD_RECOVERY") {
           // Keep whatever state we have — the reset-password page handles this
         } else if (event === "TOKEN_REFRESHED" && session?.user) {
-          // Optionally re-fetch profile after token refresh
-          const profile = await fetchProfile(session.user.id);
-          if (mounted) setState((prev) => ({ ...prev, user: profile }));
+          const { user, manager } = await loadUserAndManager(session.user.id);
+          if (mounted) setState((prev) => ({ ...prev, user, manager }));
         }
       }
     );
@@ -119,21 +143,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             full_name: data.fullName,
             company_name: data.companyName,
             designation: data.designation ?? "",
-            role: "Manager",
+            role: "team_lead",
           },
         },
       });
 
       if (error) throw error;
 
-      // If Supabase auto-confirms (no email verification), a session exists immediately.
-      // Wait for the trigger to create the profiles row, then load the profile.
       if (authData.session?.user) {
         const profile = await fetchProfileWithRetry(authData.session.user.id);
-        setState({ user: profile, loading: false, error: null });
+        let manager: ManagerProfile | null = null;
+        if (profile?.manager_id) {
+          manager = await fetchManager(profile.manager_id);
+        }
+        setState({ user: profile, manager, loading: false, error: null });
         toast.success("Account created! Welcome to Retention Signal AI.");
       } else {
-        // Email confirmation required
         setState((prev) => ({ ...prev, loading: false }));
         toast.success("Account created! Please check your email to verify your account.");
       }
@@ -155,7 +180,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (!data.session) throw new Error("No session returned from sign in");
 
       const profile = await fetchProfile(data.session.user.id);
-      setState({ user: profile, loading: false, error: null });
+      let manager: ManagerProfile | null = null;
+      if (profile?.manager_id) {
+        manager = await fetchManager(profile.manager_id);
+      }
+      setState({ user: profile, manager, loading: false, error: null });
       toast.success("Welcome back!");
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Failed to sign in";
@@ -171,7 +200,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
-      setState({ user: null, loading: false, error: null });
+      setState({ user: null, manager: null, loading: false, error: null });
       toast.success("Signed out successfully");
       window.location.href = "/login";
     } catch (err: unknown) {
@@ -214,7 +243,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (error) throw error;
 
       const updated = await fetchProfile(state.user.id);
-      setState((prev) => ({ ...prev, user: updated, loading: false }));
+      let manager = state.manager;
+      if (updated?.manager_id && updated.manager_id !== state.user.manager_id) {
+        manager = await fetchManager(updated.manager_id);
+      }
+      setState((prev) => ({ ...prev, user: updated, manager, loading: false }));
       toast.success("Profile updated successfully");
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Failed to update profile";
