@@ -4,80 +4,58 @@ import { useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { useAuth } from "@/contexts/auth-context";
 import { Loader2 } from "lucide-react";
+import { supabase } from "@/lib/supabase";
 
-interface ProtectedRouteProps {
+// PRD §3: Manager Authentication + Access Restrictions
+// Routes that belong to the Manager workspace
+const MANAGER_ROUTES_PREFIX = "/manager";
+
+interface ManagerProtectedRouteProps {
   children: React.ReactNode;
 }
 
-const PUBLIC_ROUTES = ["/login", "/register", "/reset-password"];
-
-export function ProtectedRoute({ children }: ProtectedRouteProps) {
+export function ManagerProtectedRoute({ children }: ManagerProtectedRouteProps) {
   const { user, loading } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
 
-  const isPublic = PUBLIC_ROUTES.includes(pathname);
-  const isManagerRoute = pathname.startsWith("/manager");
+  const isManagerRoute = pathname.startsWith(MANAGER_ROUTES_PREFIX);
 
   useEffect(() => {
     if (loading) return;
 
-    // Unauthenticated user on a protected route → send to login
-    if (!user && !isPublic) {
+    // Not authenticated → login
+    if (!user) {
       router.replace("/login");
       return;
     }
 
-    if (!user) return;
-
     const role = user.role?.toLowerCase();
 
-    // PRD §3: Authenticated user on login/register → route by role
-    if (pathname === "/login" || pathname === "/register") {
-      if (role === "manager") {
-        router.replace("/manager/dashboard");
-      } else {
-        router.replace("/");
-      }
+    // On a manager route: only 'manager' role is allowed
+    if (isManagerRoute && role !== "manager") {
+      // Don't redirect — we will show an access denied page below
       return;
     }
+  }, [user, loading, pathname, isManagerRoute, router]);
 
-    // PRD §3: Manager trying to access Team Lead routes (non-manager routes)
-    // → redirect to manager workspace, do NOT serve Team Lead workspace to manager
-    if (role === "manager" && !isManagerRoute && !isPublic) {
-      router.replace("/manager/dashboard");
-      return;
-    }
-
-    // PRD §3: Team Lead trying to access Manager routes → access denied (handled in ManagerProtectedRoute)
-    // CEO trying to access any route → access denied for now (future phase)
-  }, [user, loading, pathname, isPublic, isManagerRoute, router]);
-
-  // Splash screen while session is being restored
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-4">
           <Loader2 className="w-8 h-8 animate-spin text-primary" />
-          <p className="text-sm text-muted-foreground">Loading your workspace...</p>
+          <p className="text-sm text-muted-foreground">Loading Manager workspace...</p>
         </div>
       </div>
     );
   }
 
-  // Public routes always render
-  if (isPublic) return <>{children}</>;
-
-  // Protected route — wait until we have a user
   if (!user) return null;
 
   const role = user.role?.toLowerCase();
 
-  // Manager routes are handled by ManagerProtectedRoute inside the /manager layout
-  if (isManagerRoute) return <>{children}</>;
-
-  // Role check: only team_lead can access the Team Lead workspace (non-manager routes)
-  if (role && role !== "team_lead") {
+  // PRD §3: Team Lead or other role trying to access manager routes
+  if (isManagerRoute && role !== "manager") {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-4 max-w-sm text-center px-6">
@@ -86,14 +64,13 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
           </div>
           <h1 className="text-lg font-semibold text-foreground">Access Restricted</h1>
           <p className="text-sm text-muted-foreground">
-            You do not have access to the Team Lead workspace.
+            You do not have access to the Manager workspace.
           </p>
           <p className="text-xs text-muted-foreground">
             Your current role: <span className="font-medium text-foreground capitalize">{user.role}</span>
           </p>
           <button
             onClick={async () => {
-              const { supabase } = await import("@/lib/supabase");
               await supabase.auth.signOut();
               window.location.href = "/login";
             }}

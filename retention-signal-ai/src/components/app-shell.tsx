@@ -26,6 +26,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     );
   }
 
+  // PRD §21: Manager routes use their own ManagerLayout — AppShell is skipped
+  if (pathname.startsWith("/manager")) {
+    return <>{children}</>;
+  }
+
   return (
     <div className="min-h-screen bg-background">
       <Sidebar collapsed={collapsed} onToggle={() => setCollapsed(!collapsed)} />
